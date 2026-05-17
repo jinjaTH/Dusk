@@ -14,6 +14,11 @@ import net.minecraft.world.level.levelgen.Heightmap;
 public class ThalassophobiaModule {
 
     public static void tick(ServerPlayer player) {
+        if (player.isCreative() || player.isSpectator()) {
+            reset(player);
+            return;
+        }
+
         ServerLevel level = player.serverLevel();
 
         if (!meetsCondition(player, level)) {
