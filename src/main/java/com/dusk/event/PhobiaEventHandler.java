@@ -6,9 +6,18 @@ import com.dusk.module.ThalassophobiaModule;
 import com.dusk.tracker.DreadTracker;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+
 public class PhobiaEventHandler {
+
+    // pending teleport countdown: UUID → ticks remaining
+    private static final Map<UUID, Integer> pendingTeleports = new HashMap<>();
 
     public static void register() {
         ServerTickEvents.END_SERVER_TICK.register(server -> {
@@ -17,6 +26,18 @@ public class PhobiaEventHandler {
                 AcrophobiaModule.tick(player);
                 ThalassophobiaModule.tick(player);
             }
+
+            // Process delayed teleports
+            pendingTeleports.entrySet().removeIf(entry -> {
+                int remaining = entry.getValue() - 1;
+                if (remaining <= 0) {
+                    ServerPlayer player = server.getPlayerList().getPlayer(entry.getKey());
+                    if (player != null) executeSpawnTeleport(player);
+                    return true;
+                }
+                entry.setValue(remaining);
+                return false;
+            });
         });
 
         ServerEntityEvents.ENTITY_LOAD.register((entity, level) -> {
@@ -28,41 +49,40 @@ public class PhobiaEventHandler {
         ServerEntityEvents.ENTITY_UNLOAD.register((entity, level) -> {
             if (entity instanceof ServerPlayer player) {
                 DreadTracker.remove(player.getUUID());
+                pendingTeleports.remove(player.getUUID());
             }
         });
     }
 
     public static void triggerTeleport(ServerPlayer player) {
-        // Fade is handled client-side (stage 6 packet received)
-        // Delay teleport by 10 ticks to let fade play out
-        player.getServer().execute(() -> {
-            player.getServer().tell(new net.minecraft.server.TickTask(
-                player.getServer().getTickCount() + 10,
-                () -> {
-                    var spawnPos = player.getRespawnPosition();
-                    if (spawnPos != null) {
-                        var spawnLevel = player.getServer().getLevel(player.getRespawnDimension());
-                        if (spawnLevel != null) {
-                            player.teleportTo(spawnLevel,
-                                spawnPos.getX() + 0.5,
-                                spawnPos.getY(),
-                                spawnPos.getZ() + 0.5,
-                                player.getYRot(), player.getXRot());
-                        } else {
-                            teleportToWorldSpawn(player);
-                        }
-                    } else {
-                        teleportToWorldSpawn(player);
-                    }
+        pendingTeleports.put(player.getUUID(), 10);
+    }
+
+    private static void executeSpawnTeleport(ServerPlayer player) {
+        var config = player.getRespawnConfig();
+        if (config != null) {
+            var data = config.respawnData();
+            if (data != null) {
+                var spawnLevel = player.level().getServer().getLevel(data.dimension());
+                if (spawnLevel != null) {
+                    var pos = data.pos();
+                    player.teleportTo(spawnLevel,
+                        pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5,
+                        Collections.emptySet(),
+                        player.getYRot(), player.getXRot(), false);
+                    return;
                 }
-            ));
-        });
+            }
+        }
+        teleportToWorldSpawn(player);
     }
 
     private static void teleportToWorldSpawn(ServerPlayer player) {
-        var overworld = player.getServer().overworld();
-        var spawn = overworld.getSharedSpawnPos();
-        player.teleportTo(overworld, spawn.getX() + 0.5, spawn.getY(), spawn.getZ() + 0.5,
-            player.getYRot(), player.getXRot());
+        ServerLevel overworld = player.level().getServer().overworld();
+        var spawn = overworld.getRespawnData().pos();
+        player.teleportTo(overworld,
+            spawn.getX() + 0.5, spawn.getY(), spawn.getZ() + 0.5,
+            Collections.emptySet(),
+            player.getYRot(), player.getXRot(), false);
     }
 }
