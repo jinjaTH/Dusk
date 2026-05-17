@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "id": "unlock",
+  "version": "${version}",
+  "name": "Unlock",
+  "description": "ปลดขีดจำกัดต่างๆ ของ Minecraft ทั้งฝั่ง client และ server",
+  "authors": [],
+  "contact": {},
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["com.example.unlock.UnlockMod"],
+    "client": ["com.example.unlock.UnlockModClient"],
+    "modmenu": ["com.example.unlock.UnlockModMenuIntegration"]
+  },
+  "mixins": [
+    "unlock.mixins.json",
+    {
+      "config": "unlock.client.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=0.17.2",
+    "fabric-api": "*",
+    "minecraft": "~1.21.1",
+    "java": ">=21"
+  },
+  "suggests": {
+    "modmenu": "*"
+  }
+}

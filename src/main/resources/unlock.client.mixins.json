@@ -1,0 +1,16 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.example.unlock.mixin.client",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "GameOptionsMixin",
+    "ParticleEngineMixin",
+    "OptionInstanceFovMixin",
+    "CommandSuggestorMixin",
+    "MultiPlayerGameModeMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

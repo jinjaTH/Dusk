@@ -1,0 +1,17 @@
+{
+  "config.unlock.title": "Unlock Mod Config",
+
+  "config.unlock.enableRenderDistance": "Unlock Render Distance",
+  "config.unlock.maxRenderDistance": "Max Render Distance (chunks)",
+
+  "config.unlock.enableParticleLimit": "Unlock Particle Limit",
+
+  "config.unlock.enableFov": "Unlock FOV Range",
+
+  "config.unlock.enableCommandSuggestions": "Unlock Command Suggestions",
+
+  "config.unlock.enableStackSize": "Unlock Stack Size",
+  "config.unlock.maxStackSize": "Max Stack Size",
+
+  "config.unlock.enableReach": "Unlock Reach Distance"
+}

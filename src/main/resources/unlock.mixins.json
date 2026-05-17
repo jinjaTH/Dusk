@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.example.unlock.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "ItemMixin",
+    "ItemStackMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
