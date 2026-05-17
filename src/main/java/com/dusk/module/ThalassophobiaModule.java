@@ -19,7 +19,7 @@ public class ThalassophobiaModule {
             return;
         }
 
-        ServerLevel level = player.serverLevel();
+        ServerLevel level = player.level();
 
         if (!meetsCondition(player, level)) {
             reset(player);

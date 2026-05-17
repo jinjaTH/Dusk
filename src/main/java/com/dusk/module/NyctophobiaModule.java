@@ -20,7 +20,7 @@ public class NyctophobiaModule {
             return;
         }
 
-        ServerLevel level = player.serverLevel();
+        ServerLevel level = player.level();
 
         // Only overworld
         if (!level.dimensionType().natural()) {
