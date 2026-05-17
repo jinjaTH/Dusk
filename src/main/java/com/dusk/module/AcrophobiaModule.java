@@ -8,10 +8,12 @@ import net.minecraft.world.level.Level;
 
 public class AcrophobiaModule {
 
-    // seconds × 20 ticks
-    private static final long[] THRESHOLDS_TICKS = { 0, 100, 300, 500, 700, 700 };
-
     public static void tick(ServerPlayer player) {
+        if (player.isCreative() || player.isSpectator()) {
+            reset(player);
+            return;
+        }
+
         if (!meetsCondition(player)) {
             reset(player);
             return;

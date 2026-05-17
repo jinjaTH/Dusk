@@ -15,7 +15,12 @@ public class NyctophobiaModule {
     private static final double[] THRESHOLDS = { 0, 300, 600, 900, 1100, 1300 };
 
     public static void tick(ServerPlayer player) {
-        ServerLevel level = player.serverLevel();
+        if (player.isCreative() || player.isSpectator()) {
+            reset(player);
+            return;
+        }
+
+        ServerLevel level = player.level();
 
         // Only overworld
         if (!level.dimensionType().natural()) {

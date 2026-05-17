@@ -2,6 +2,9 @@
 .gradle/
 build/
 
+# Build outputs per version
+builds/
+
 # Eclipse
 .settings/
 .classpath
