@@ -23,7 +23,7 @@ public class NyctophobiaModule {
         ServerLevel level = player.level();
 
         // Only overworld
-        if (!level.dimensionType().natural()) {
+        if (!level.dimensionType().hasSkyLight()) {
             reset(player);
             return;
         }
