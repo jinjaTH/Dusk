@@ -1,32 +1,28 @@
 {
   "schemaVersion": 1,
-  "id": "unlock",
+  "id": "dusk",
   "version": "${version}",
-  "name": "Unlock",
-  "description": "ปลดขีดจำกัดต่างๆ ของ Minecraft ทั้งฝั่ง client และ server",
+  "name": "Dusk",
+  "description": "Minecraft is quieter than you remember.",
   "authors": [],
   "contact": {},
   "license": "MIT",
   "environment": "*",
   "entrypoints": {
-    "main": ["com.example.unlock.UnlockMod"],
-    "client": ["com.example.unlock.UnlockModClient"],
-    "modmenu": ["com.example.unlock.UnlockModMenuIntegration"]
+    "main":   ["com.dusk.Dusk"],
+    "client": ["com.dusk.DuskClient"]
   },
   "mixins": [
-    "unlock.mixins.json",
+    "dusk.mixins.json",
     {
-      "config": "unlock.client.mixins.json",
+      "config": "dusk.client.mixins.json",
       "environment": "client"
     }
   ],
   "depends": {
-    "fabricloader": ">=0.17.2",
+    "fabricloader": ">=0.16.0",
     "fabric-api": "*",
     "minecraft": "~1.21.1",
     "java": ">=21"
-  },
-  "suggests": {
-    "modmenu": "*"
   }
 }
