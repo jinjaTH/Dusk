@@ -11,8 +11,12 @@ import net.minecraft.world.phys.AABB;
 
 public class NyctophobiaModule {
 
-    // dreadScore thresholds per stage
-    private static final double[] THRESHOLDS = { 0, 300, 600, 900, 1100, 1300 };
+    // Max dreadScore that maps to normalized score = 1.0
+    // At max rate (1.2/tick, light=0, no mob): 2083 ticks ≈ 104 seconds
+    private static final double MAX_DREAD = 2500.0;
+
+    // Send score packet every N ticks for smooth client interpolation
+    private static final int SEND_INTERVAL = 4;
 
     public static void tick(ServerPlayer player) {
         if (player.isCreative() || player.isSpectator()) {
@@ -22,7 +26,6 @@ public class NyctophobiaModule {
 
         ServerLevel level = player.level();
 
-        // Only overworld
         if (!level.dimensionType().natural()) {
             reset(player);
             return;
@@ -36,33 +39,33 @@ public class NyctophobiaModule {
             return;
         }
 
+        if (PhobiaEventHandler.isTeleportPending(player.getUUID())) return;
+
         double darknessMultiplier = switch (light) {
             case 0 -> 1.00;
             case 1 -> 0.75;
             case 2 -> 0.50;
-            default -> 0.25; // 3
+            default -> 0.25;
         };
 
+        // Silence amplifies fear — no mobs means nothing to ground the imagination
         double silenceMultiplier = countMobsNearby(player, level) == 0 ? 1.2 : 1.0;
-
-        // Skip accumulation while teleport is pending (waiting for fade to complete)
-        if (PhobiaEventHandler.isTeleportPending(player.getUUID())) return;
 
         double current = DreadTracker.getDread(player.getUUID(), DreadTracker.NYCTO);
         current += darknessMultiplier * silenceMultiplier;
         DreadTracker.setDread(player.getUUID(), DreadTracker.NYCTO, current);
 
-        int newStage = computeStage(current);
-        int oldStage = DreadTracker.setStageAndGetOld(player.getUUID(), DreadTracker.NYCTO, newStage);
+        float normalized = (float) Math.min(1.0, current / MAX_DREAD);
 
-        if (newStage != oldStage) {
-            DuskNetwork.sendStage(player, DreadTracker.NYCTO, newStage);
+        // Send every SEND_INTERVAL ticks for smooth client lerp
+        int tick = (int)(current % SEND_INTERVAL);
+        if (tick == 0) {
+            DuskNetwork.sendScore(player, normalized);
         }
 
-        if (newStage == 6) {
+        // Trigger teleport at full panic (score >= 1.0)
+        if (normalized >= 1.0f) {
             PhobiaEventHandler.triggerTeleport(player);
-            // Don't reset here — PhobiaEventHandler resets after teleport
-            // so client sees the fade before stage 0 is sent
         }
     }
 
@@ -70,17 +73,7 @@ public class NyctophobiaModule {
         double prev = DreadTracker.getDread(player.getUUID(), DreadTracker.NYCTO);
         if (prev == 0) return;
         DreadTracker.setDread(player.getUUID(), DreadTracker.NYCTO, 0);
-        int oldStage = DreadTracker.setStageAndGetOld(player.getUUID(), DreadTracker.NYCTO, 0);
-        if (oldStage != 0) {
-            DuskNetwork.sendStage(player, DreadTracker.NYCTO, 0);
-        }
-    }
-
-    private static int computeStage(double score) {
-        for (int i = THRESHOLDS.length - 1; i >= 0; i--) {
-            if (score >= THRESHOLDS[i]) return i + 1 > 6 ? 6 : i + 1;
-        }
-        return 0;
+        DuskNetwork.sendScore(player, 0f);
     }
 
     private static int countMobsNearby(ServerPlayer player, ServerLevel level) {

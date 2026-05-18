@@ -17,13 +17,19 @@ public class DuskClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         ClientPlayNetworking.registerGlobalReceiver(DreadStagePayload.TYPE, (payload, context) -> {
-            context.client().execute(() ->
-                ClientDreadState.updateFromPacket(payload.phobiaId(), payload.stage())
-            );
+            context.client().execute(() -> {
+                float score = payload.normalizedScore();
+                if (score <= 0f) {
+                    ClientDreadState.reset();
+                } else {
+                    ClientDreadState.targetScore = score;
+                }
+            });
         });
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client.level == null) return;
+            ClientDreadState.tick();
             SoundEffects.clientTick();
             MovementEffects.clientTick();
         });

@@ -88,11 +88,7 @@ public class PhobiaEventHandler {
     }
 
     private static void resetAfterTeleport(ServerPlayer player) {
-        UUID uuid = player.getUUID();
-        if (DreadTracker.getStage(uuid, DreadTracker.NYCTO) != 0) {
-            DreadTracker.setDread(uuid, DreadTracker.NYCTO, 0);
-            DreadTracker.setStageAndGetOld(uuid, DreadTracker.NYCTO, 0);
-            DuskNetwork.sendStage(player, DreadTracker.NYCTO, 0);
-        }
+        DreadTracker.setDread(player.getUUID(), DreadTracker.NYCTO, 0);
+        DuskNetwork.sendScore(player, 0f);
     }
 }

@@ -1,6 +1,7 @@
 package com.dusk.mixin.client;
 
 import com.dusk.client.ClientDreadState;
+import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Camera;
 import net.minecraft.client.renderer.GameRenderer;
 import net.fabricmc.api.EnvType;
@@ -15,29 +16,28 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(GameRenderer.class)
 public class GameRendererMixin {
 
-    // getFov returns float in 1.21.10 (not double like in 1.21.1)
+    // getFov returns float in 1.21.10
     @Inject(method = "getFov", at = @At("RETURN"), cancellable = true)
     private void modifyFov(Camera camera, float partialTick, boolean useFovSetting,
                            CallbackInfoReturnable<Float> cir) {
         float offset = ClientDreadState.fovOffset;
-        if (offset == 0) return;
+        if (offset == 0f) return;
 
-        if (ClientDreadState.nyctophobiaStage == 3) {
-            offset += (float)(Math.sin(System.currentTimeMillis() * 0.003) * 3.0);
-        }
-
-        cir.setReturnValue(cir.getReturnValue() + offset);
+        // Add subtle breathing pulse on top of the narrowing — feels alive
+        float pulse = (float)(Math.sin(System.currentTimeMillis() * 0.0022) * 0.8);
+        cir.setReturnValue(cir.getReturnValue() + offset + pulse * ClientDreadState.shakeIntensity);
     }
 
-    @Inject(method = "bobHurt", at = @At("RETURN"))
-    private void addShake(com.mojang.blaze3d.vertex.PoseStack poseStack, float partialTick,
-                          CallbackInfo ci) {
+    // bobView runs every render frame — correct hook for continuous camera shake
+    @Inject(method = "bobView", at = @At("RETURN"))
+    private void addShake(PoseStack poseStack, float partialTick, CallbackInfo ci) {
         float intensity = ClientDreadState.shakeIntensity;
-        if (intensity <= 0) return;
+        if (intensity < 0.01f) return;
 
-        long time = System.currentTimeMillis();
-        float shakeX = (float)(Math.sin(time * 0.023) * intensity);
-        float shakeY = (float)(Math.cos(time * 0.017) * intensity * 0.5);
-        poseStack.translate(shakeX * 0.01f, shakeY * 0.01f, 0);
+        long t = System.currentTimeMillis();
+        // Two overlapping sine waves at different frequencies — organic tremor feel
+        float shakeX = (float)(Math.sin(t * 0.029) * 0.55 + Math.sin(t * 0.071) * 0.45) * intensity * 0.009f;
+        float shakeY = (float)(Math.cos(t * 0.023) * 0.60 + Math.cos(t * 0.053) * 0.40) * intensity * 0.005f;
+        poseStack.translate(shakeX, shakeY, 0f);
     }
 }

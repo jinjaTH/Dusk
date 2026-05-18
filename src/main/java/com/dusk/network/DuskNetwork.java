@@ -10,7 +10,8 @@ public class DuskNetwork {
         PayloadTypeRegistry.playS2C().register(DreadStagePayload.TYPE, DreadStagePayload.CODEC);
     }
 
-    public static void sendStage(ServerPlayer player, int phobiaId, int stage) {
-        ServerPlayNetworking.send(player, new DreadStagePayload(phobiaId, stage));
+    public static void sendScore(ServerPlayer player, float score) {
+        int encoded = Math.round(Math.max(0f, Math.min(1f, score)) * 10000f);
+        ServerPlayNetworking.send(player, new DreadStagePayload(encoded));
     }
 }
