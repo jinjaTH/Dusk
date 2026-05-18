@@ -1,7 +1,6 @@
 package com.dusk.effect;
 
 import com.dusk.client.ClientDreadState;
-import com.mojang.blaze3d.systems.RenderSystem;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
@@ -50,8 +49,7 @@ public class VisualEffects {
         if (alpha <= 0) return;
 
         // Smooth fade tick down after reaching max
-        if (alpha > 0 && ClientDreadState.nyctophobiaStage < 6
-            && ClientDreadState.thalassophobiaStage < 6) {
+        if (alpha > 0 && ClientDreadState.nyctophobiaStage < 6) {
             ClientDreadState.fadeAlpha = Math.max(0, alpha - 0.02f);
         }
 

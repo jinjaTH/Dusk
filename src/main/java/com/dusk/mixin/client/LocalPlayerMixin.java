@@ -13,20 +13,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(LocalPlayer.class)
 public class LocalPlayerMixin {
 
-    @Inject(method = "aiStep", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "aiStep", at = @At("HEAD"))
     private void onAiStep(CallbackInfo ci) {
-        if (ClientDreadState.frozen) {
-            ci.cancel();
-            return;
-        }
-
         LocalPlayer self = (LocalPlayer)(Object)this;
-
-        // Movement speed reduction
-        float speedMult = ClientDreadState.speedMultiplier;
-        if (speedMult < 1f) {
-            self.setDeltaMovement(self.getDeltaMovement().scale(speedMult));
-        }
 
         // Input drift for Nyctophobia stage 4
         float drift = ClientDreadState.driftAngle;
