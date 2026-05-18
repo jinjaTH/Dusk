@@ -16,7 +16,7 @@ public class NaturalSpawnerMixin {
         at = @At("HEAD"),
         cancellable = true
     )
-    private static void blockHostileSpawns(
+    private static void controlSpawns(
         MobCategory category,
         net.minecraft.server.level.ServerLevel level,
         LevelChunk chunk,
@@ -24,6 +24,13 @@ public class NaturalSpawnerMixin {
         NaturalSpawner.AfterSpawnCallback callback,
         CallbackInfo ci
     ) {
-        if (category == MobCategory.MONSTER) ci.cancel();
+        switch (category) {
+            case MONSTER -> ci.cancel(); // ไม่มีปิศาจเลย
+            case CREATURE, AMBIENT -> {
+                // passive animals และ ambient creatures หายาก 85%
+                if (Math.random() < 0.85) ci.cancel();
+            }
+            default -> {} // water creatures, underground water ฯลฯ ปกติ
+        }
     }
 }
