@@ -111,5 +111,8 @@ public class SoundEffects {
         mc.getSoundManager().play(
             SimpleSoundInstance.forUI(SoundEvents.NOTE_BLOCK_BASEDRUM.value(), vol, 0.5f)
         );
+
+        // Sync vignette pulse with each heartbeat — creates throb effect
+        ClientDreadState.vignettePulse = 0.7f + intensity * 0.3f;
     }
 }

@@ -88,6 +88,9 @@ public class PhobiaEventHandler {
     }
 
     private static void resetAfterTeleport(ServerPlayer player) {
+        // Remove all invisible effects — must happen before score=0 packet
+        // so client and server clear simultaneously
+        NyctophobiaModule.removeAllEffects(player);
         DreadTracker.setDread(player.getUUID(), DreadTracker.NYCTO, 0);
         DuskNetwork.sendScore(player, 0f);
     }
