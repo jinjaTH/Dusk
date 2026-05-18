@@ -15,9 +15,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(GameRenderer.class)
 public class GameRendererMixin {
 
+    // getFov returns float in 1.21.10 (not double like in 1.21.1)
     @Inject(method = "getFov", at = @At("RETURN"), cancellable = true)
     private void modifyFov(Camera camera, float partialTick, boolean useFovSetting,
-                           CallbackInfoReturnable<Double> cir) {
+                           CallbackInfoReturnable<Float> cir) {
         float offset = ClientDreadState.fovOffset;
         if (offset == 0) return;
 

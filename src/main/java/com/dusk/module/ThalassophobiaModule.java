@@ -26,6 +26,8 @@ public class ThalassophobiaModule {
             return;
         }
 
+        if (PhobiaEventHandler.isTeleportPending(player.getUUID())) return;
+
         long exposure = DreadTracker.getExposure(player.getUUID(), DreadTracker.THALA) + 1;
         DreadTracker.setExposure(player.getUUID(), DreadTracker.THALA, exposure);
 
@@ -38,7 +40,7 @@ public class ThalassophobiaModule {
 
         if (newStage == 6) {
             PhobiaEventHandler.triggerTeleport(player);
-            reset(player);
+            // Don't reset here — PhobiaEventHandler resets after teleport
         }
     }
 

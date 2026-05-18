@@ -45,6 +45,9 @@ public class NyctophobiaModule {
 
         double silenceMultiplier = countMobsNearby(player, level) == 0 ? 1.2 : 1.0;
 
+        // Skip accumulation while teleport is pending (waiting for fade to complete)
+        if (PhobiaEventHandler.isTeleportPending(player.getUUID())) return;
+
         double current = DreadTracker.getDread(player.getUUID(), DreadTracker.NYCTO);
         current += darknessMultiplier * silenceMultiplier;
         DreadTracker.setDread(player.getUUID(), DreadTracker.NYCTO, current);
@@ -58,7 +61,8 @@ public class NyctophobiaModule {
 
         if (newStage == 6) {
             PhobiaEventHandler.triggerTeleport(player);
-            reset(player);
+            // Don't reset here — PhobiaEventHandler resets after teleport
+            // so client sees the fade before stage 0 is sent
         }
     }
 
