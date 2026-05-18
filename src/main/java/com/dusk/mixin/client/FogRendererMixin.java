@@ -14,11 +14,16 @@ import org.spongepowered.asm.mixin.injection.invoke.arg.Args;
 public class FogRendererMixin {
 
     /**
-     * updateBuffer(ByteBuffer, int, Vector4f color, float envStart, float renderStart,
-     *              float envEnd, float renderEnd, float skyEnd, float cloudEnd)
-     * Indices 3-8 are all fog distance values — scale them to increase fog density.
+     * Target the INVOKE of updateBuffer inside setupFog to intercept its args.
+     * Indices 3-8 are the 6 float fog distance values — scale them to increase fog density.
      */
-    @ModifyArgs(method = "updateBuffer", at = @At("HEAD"))
+    @ModifyArgs(
+        method = "setupFog",
+        at = @At(
+            value = "INVOKE",
+            target = "Lnet/minecraft/client/renderer/fog/FogRenderer;updateBuffer(Ljava/nio/ByteBuffer;ILorg/joml/Vector4f;FFFFFF)V"
+        )
+    )
     private void modifyFogDistances(Args args) {
         float mult = ClientDreadState.fogMultiplier;
         if (mult >= 1f) return;
