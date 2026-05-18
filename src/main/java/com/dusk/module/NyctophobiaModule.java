@@ -7,16 +7,17 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.LightLayer;
-import net.minecraft.world.phys.AABB;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 
 public class NyctophobiaModule {
 
-    // Max dreadScore that maps to normalized score = 1.0
-    // At max rate (1.2/tick, light=0, no mob): 2083 ticks ≈ 104 seconds
-    private static final double MAX_DREAD = 2500.0;
+    private static final double MAX_DREAD  = 1500.0;
+    private static final int    SEND_EVERY = 4;
 
-    // Send score packet every N ticks for smooth client interpolation
-    private static final int SEND_INTERVAL = 4;
+    private static final Map<UUID, Integer> tickCounters = new HashMap<>();
 
     public static void tick(ServerPlayer player) {
         if (player.isCreative() || player.isSpectator()) {
@@ -25,7 +26,6 @@ public class NyctophobiaModule {
         }
 
         ServerLevel level = player.level();
-
         if (!level.dimensionType().natural()) {
             reset(player);
             return;
@@ -34,50 +34,46 @@ public class NyctophobiaModule {
         BlockPos pos = player.blockPosition();
         int light = level.getBrightness(LightLayer.BLOCK, pos);
 
-        if (light > 3) {
+        // Trigger at block light <= 4 — checks only the block the player stands on
+        if (light > 4) {
             reset(player);
             return;
         }
 
         if (PhobiaEventHandler.isTeleportPending(player.getUUID())) return;
 
+        // Darker = faster buildup, light 4 is very slow
         double darknessMultiplier = switch (light) {
             case 0 -> 1.00;
-            case 1 -> 0.75;
-            case 2 -> 0.50;
-            default -> 0.25;
+            case 1 -> 0.80;
+            case 2 -> 0.55;
+            case 3 -> 0.30;
+            default -> 0.12; // 4
         };
 
-        // Silence amplifies fear — no mobs means nothing to ground the imagination
-        double silenceMultiplier = countMobsNearby(player, level) == 0 ? 1.2 : 1.0;
-
-        double current = DreadTracker.getDread(player.getUUID(), DreadTracker.NYCTO);
-        current += darknessMultiplier * silenceMultiplier;
-        DreadTracker.setDread(player.getUUID(), DreadTracker.NYCTO, current);
+        UUID uuid = player.getUUID();
+        double current = DreadTracker.getDread(uuid, DreadTracker.NYCTO);
+        current += darknessMultiplier;
+        DreadTracker.setDread(uuid, DreadTracker.NYCTO, current);
 
         float normalized = (float) Math.min(1.0, current / MAX_DREAD);
 
-        // Send every SEND_INTERVAL ticks for smooth client lerp
-        int tick = (int)(current % SEND_INTERVAL);
-        if (tick == 0) {
+        int counter = tickCounters.merge(uuid, 1, Integer::sum);
+        if (counter % SEND_EVERY == 0) {
             DuskNetwork.sendScore(player, normalized);
         }
 
-        // Trigger teleport at full panic (score >= 1.0)
         if (normalized >= 1.0f) {
             PhobiaEventHandler.triggerTeleport(player);
         }
     }
 
     private static void reset(ServerPlayer player) {
-        double prev = DreadTracker.getDread(player.getUUID(), DreadTracker.NYCTO);
+        UUID uuid = player.getUUID();
+        double prev = DreadTracker.getDread(uuid, DreadTracker.NYCTO);
         if (prev == 0) return;
-        DreadTracker.setDread(player.getUUID(), DreadTracker.NYCTO, 0);
+        DreadTracker.setDread(uuid, DreadTracker.NYCTO, 0);
+        tickCounters.put(uuid, 0);
         DuskNetwork.sendScore(player, 0f);
-    }
-
-    private static int countMobsNearby(ServerPlayer player, ServerLevel level) {
-        AABB box = player.getBoundingBox().inflate(16);
-        return level.getEntities(player, box, e -> e instanceof net.minecraft.world.entity.Mob).size();
     }
 }

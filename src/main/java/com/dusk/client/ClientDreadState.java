@@ -7,16 +7,16 @@ import net.fabricmc.api.Environment;
 public class ClientDreadState {
 
     // Score thresholds — what score each effect begins and reaches full intensity
-    public static final float SILENCE_START  = 0.15f;
-    public static final float SILENCE_FULL   = 0.40f;
-    public static final float VIGNETTE_START = 0.28f;
-    public static final float VIGNETTE_FULL  = 0.70f;
-    public static final float PHANTOM_START  = 0.50f;
-    public static final float FLICKER_START  = 0.62f;
-    public static final float FOV_START      = 0.68f;
-    public static final float FOV_FULL       = 0.90f;
-    public static final float SHAKE_START    = 0.80f;
-    public static final float FADE_START     = 0.92f;
+    public static final float SILENCE_START  = 0.08f;  // ~5s  ambient เริ่มเบา
+    public static final float SILENCE_FULL   = 0.30f;  // ~19s เงียบสนิท
+    public static final float VIGNETTE_START = 0.18f;  // ~11s vignette เริ่ม
+    public static final float VIGNETTE_FULL  = 0.55f;  // ~34s vignette เต็ม
+    public static final float PHANTOM_START  = 0.35f;  // ~22s เสียงหลอน
+    public static final float FLICKER_START  = 0.48f;  // ~30s peripheral flicker
+    public static final float FOV_START      = 0.55f;  // ~34s FOV แคบ
+    public static final float FOV_FULL       = 0.80f;  // ~50s FOV เต็ม
+    public static final float SHAKE_START    = 0.70f;  // ~44s shake + heartbeat
+    public static final float FADE_START     = 0.90f;  // ~56s fade to black
 
     // Network-received target (updated every ~4 server ticks)
     public static float targetScore = 0f;

@@ -3,7 +3,9 @@
   "minVersion": "0.8",
   "package": "com.dusk.mixin",
   "compatibilityLevel": "JAVA_21",
-  "mixins": [],
+  "mixins": [
+    "NaturalSpawnerMixin"
+  ],
   "injectors": {
     "defaultRequire": 1
   }
