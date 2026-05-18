@@ -45,6 +45,12 @@ public class ClientDreadState {
     public static int   shadowH        = 0;
     public static int   shadowCooldown = 0;
 
+    // Collapse camera tilt (Z rotation in degrees) — builds at FADE_START
+    public static float tiltAngle      = 0f;
+
+    // Phantom figure (in-world particles) cooldown
+    public static int   phantomFigureCooldown = 0;
+
     public static void tick() {
         float diff = targetScore - score;
         score += diff * (diff > 0 ? 0.030f : 0.055f);
@@ -65,11 +71,16 @@ public class ClientDreadState {
         // Pulse decay each tick
         if (vignettePulse > 0f) vignettePulse = Math.max(0f, vignettePulse - 0.06f);
 
-        // Flicker and shadow cooldowns
+        // Collapse camera tilt — only during fade stage
+        float targetTilt = smooth(FADE_START, 1.0f, score) * 13f;
+        tiltAngle += (targetTilt - tiltAngle) * 0.04f;
+
+        // Cooldowns
         if (flickerAlpha   > 0f) flickerAlpha   = Math.max(0f, flickerAlpha   - 0.25f);
         if (flickerCooldown > 0) flickerCooldown--;
         if (shadowAlpha    > 0f) shadowAlpha    = Math.max(0f, shadowAlpha    - 0.018f);
         if (shadowCooldown  > 0) shadowCooldown--;
+        if (phantomFigureCooldown > 0) phantomFigureCooldown--;
     }
 
     // Called when score=0 arrives — immediate clear, no lerp
@@ -86,6 +97,8 @@ public class ClientDreadState {
         flickerCooldown = 0;
         shadowAlpha    = 0f;
         shadowCooldown = 0;
+        tiltAngle      = 0f;
+        phantomFigureCooldown = 0;
     }
 
     public static float smooth(float edge0, float edge1, float x) {

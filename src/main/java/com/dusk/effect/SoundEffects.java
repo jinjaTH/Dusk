@@ -13,106 +13,185 @@ public class SoundEffects {
 
     private static final RandomSource RNG = RandomSource.create();
 
-    // Phantom sound cooldown in ticks
-    private static int phantomCooldown = 0;
+    // --- Breathing ---
+    private static int breathCooldown  = 0;
+    private static boolean nextIsExhale = false;
 
-    // Heartbeat: ticks between beats, second-beat delay
-    private static int heartbeatCooldown = 0;
-    private static boolean waitingSecondBeat = false;
-    private static int secondBeatDelay = 0;
+    // --- Approaching footsteps state machine ---
+    private static int  footstepState   = 0;   // 0=idle, 1-4=steps, 5=aftermath
+    private static int  footstepTimer   = 0;
+
+    // --- Heartbeat ---
+    private static int  heartbeatCooldown  = 0;
+    private static boolean waitSecondBeat  = false;
+    private static int  secondBeatDelay    = 0;
+
+    // --- Stumble/thud (collapse scene) ---
+    private static boolean playedStumble   = false;
+    private static boolean playedThud      = false;
 
     public static void clientTick() {
         float s = ClientDreadState.score;
         if (s <= 0.01f) {
-            phantomCooldown = 0;
-            heartbeatCooldown = 0;
-            waitingSecondBeat = false;
+            breathCooldown  = 0; nextIsExhale  = false;
+            footstepState   = 0; footstepTimer = 0;
+            heartbeatCooldown = 0; waitSecondBeat = false;
+            playedStumble = false; playedThud = false;
             return;
         }
 
-        tickPhantomSounds(s);
+        tickBreathing(s);
+        tickApproachingFootsteps(s);
         tickHeartbeat(s);
+        tickCollapseSounds(s);
     }
 
-    // Phantom sounds: footsteps, breathing, distant groans
-    // Frequency scales with score. Only starts at PHANTOM_START (~0.50)
-    private static void tickPhantomSounds(float s) {
+    // Breathing — starts quiet and close, gets heavier with intensity
+    // PLAYER_BREATH for inhale feel, DROWNED_AMBIENT for exhale (labored)
+    private static void tickBreathing(float s) {
         if (s < ClientDreadState.PHANTOM_START) return;
-        if (phantomCooldown-- > 0) return;
+        if (--breathCooldown > 0) return;
 
-        float intensity = (s - ClientDreadState.PHANTOM_START)
-                        / (1f - ClientDreadState.PHANTOM_START);
+        float intensity = (s - ClientDreadState.PHANTOM_START) / (1f - ClientDreadState.PHANTOM_START);
         intensity = Math.min(1f, intensity);
 
-        // Cooldown: 6s at start → 2.5s at full intensity, with jitter
-        int baseCooldown = (int) (120f - intensity * 70f);
-        phantomCooldown = baseCooldown + RNG.nextInt(60);
-
-        playPhantomSound(intensity);
-    }
-
-    private static void playPhantomSound(float intensity) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null) return;
 
-        // Choose sound type randomly, weighted toward footsteps (most unsettling)
-        int type = RNG.nextInt(10);
-        var event = switch (type) {
-            case 0, 1, 2 -> SoundEvents.SKELETON_STEP;
-            case 3, 4    -> SoundEvents.ZOMBIE_STEP;
-            case 5       -> SoundEvents.STONE_STEP;   // heavy footstep
-            case 6       -> SoundEvents.GRAVEL_STEP;  // something shifting
-            case 7       -> SoundEvents.WITHER_SKELETON_STEP;
-            case 8       -> SoundEvents.ZOMBIE_AMBIENT;
-            default      -> SoundEvents.AMBIENT_CAVE.value();
-        };
-
-        // Volume: quiet at start, louder with intensity
-        float vol = 0.08f + intensity * 0.18f + RNG.nextFloat() * 0.06f;
-        // Pitch: slight variation — same sound, slightly different each time
-        float pitch = 0.82f + RNG.nextFloat() * 0.36f;
-
-        mc.getSoundManager().play(SimpleSoundInstance.forUI(event, vol, pitch));
+        if (!nextIsExhale) {
+            // Inhale: PLAYER_BREATH, quiet, pitched slightly high
+            float vol = 0.06f + intensity * 0.10f;
+            mc.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.PLAYER_BREATH, vol, 1.1f + RNG.nextFloat() * 0.15f));
+            breathCooldown = 14; // short gap between inhale and exhale
+            nextIsExhale = true;
+        } else {
+            // Exhale: DROWNED_AMBIENT, slightly louder, low pitch — sounds like labored breath
+            float vol = 0.05f + intensity * 0.09f;
+            mc.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.DROWNED_AMBIENT, vol, 1.4f + RNG.nextFloat() * 0.2f));
+            // Cooldown until next breath cycle — shorter at high score (faster breathing)
+            breathCooldown = (int)(60f - intensity * 35f) + RNG.nextInt(20);
+            nextIsExhale = false;
+        }
     }
 
-    // Heartbeat: two quick beats (thump-thump) every 2–3s at high score
-    // Mimics the physiological fight-or-flight response
+    // Approaching footsteps event — 4 steps getting louder, then silence
+    // The silence AFTER is the most terrifying part
+    private static void tickApproachingFootsteps(float s) {
+        if (s < ClientDreadState.PHANTOM_START) return;
+
+        if (footstepState == 0) {
+            // Idle — wait random time then start event
+            if (--footstepTimer > 0) return;
+            float intensity = (s - ClientDreadState.PHANTOM_START) / (0.9f - ClientDreadState.PHANTOM_START);
+            intensity = Math.min(1f, Math.max(0f, intensity));
+            if (RNG.nextFloat() > 0.004f + intensity * 0.006f) {
+                footstepTimer = 20;
+                return;
+            }
+            footstepState = 1;
+            footstepTimer = 25 + RNG.nextInt(15);
+            return;
+        }
+
+        if (--footstepTimer > 0) return;
+
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null) { footstepState = 0; return; }
+
+        float intensity = (s - ClientDreadState.PHANTOM_START) / (1f - ClientDreadState.PHANTOM_START);
+        intensity = Math.min(1f, intensity);
+
+        switch (footstepState) {
+            case 1 -> { // Distant — barely audible
+                playStep(mc, 0.06f + intensity * 0.04f, 0.85f + RNG.nextFloat() * 0.2f);
+                footstepState = 2;
+                footstepTimer = 22 + RNG.nextInt(8);
+            }
+            case 2 -> { // Closer
+                playStep(mc, 0.11f + intensity * 0.06f, 0.88f + RNG.nextFloat() * 0.15f);
+                footstepState = 3;
+                footstepTimer = 20 + RNG.nextInt(6);
+            }
+            case 3 -> { // Closer still
+                playStep(mc, 0.19f + intensity * 0.08f, 0.9f + RNG.nextFloat() * 0.1f);
+                footstepState = 4;
+                footstepTimer = 18 + RNG.nextInt(6);
+            }
+            case 4 -> { // Right next to you — loud
+                playStep(mc, 0.28f + intensity * 0.12f, 0.92f + RNG.nextFloat() * 0.1f);
+                footstepState = 5;              // → aftermath (silence)
+                footstepTimer = 120 + RNG.nextInt(100); // 6-11s of dead silence
+            }
+            case 5 -> { // Aftermath — nothing, reset
+                footstepState = 0;
+                footstepTimer = 200 + RNG.nextInt(200); // long gap before next event
+            }
+        }
+    }
+
+    private static void playStep(Minecraft mc, float vol, float pitch) {
+        var sound = switch (RNG.nextInt(4)) {
+            case 0 -> SoundEvents.SKELETON_STEP;
+            case 1 -> SoundEvents.ZOMBIE_STEP;
+            case 2 -> SoundEvents.WITHER_SKELETON_STEP;
+            default -> SoundEvents.STONE_STEP;
+        };
+        mc.getSoundManager().play(SimpleSoundInstance.forUI(sound, vol, pitch));
+    }
+
+    // Heartbeat — BPM scales from slow to fast as score rises
     private static void tickHeartbeat(float s) {
         if (s < ClientDreadState.SHAKE_START) return;
 
-        if (waitingSecondBeat) {
+        if (waitSecondBeat) {
             if (--secondBeatDelay <= 0) {
-                playHeartbeatBeat(s);
-                waitingSecondBeat = false;
-                // Cooldown until next pair: shorter at higher score
+                playBeat(s);
+                waitSecondBeat = false;
                 float intensity = (s - ClientDreadState.SHAKE_START) / (1f - ClientDreadState.SHAKE_START);
                 intensity = Math.min(1f, intensity);
-                heartbeatCooldown = (int) (55f - intensity * 25f) + RNG.nextInt(15);
+                // BPM 55→120: cooldown from 55 down to 25 ticks
+                heartbeatCooldown = (int)(55f - intensity * 30f) + RNG.nextInt(8);
             }
             return;
         }
 
-        if (heartbeatCooldown-- > 0) return;
+        if (--heartbeatCooldown > 0) return;
 
-        // First beat
-        playHeartbeatBeat(s);
-        waitingSecondBeat = true;
-        secondBeatDelay = 7; // ~0.35s until second beat
+        playBeat(s);
+        waitSecondBeat = true;
+        secondBeatDelay = 7;
     }
 
-    private static void playHeartbeatBeat(float s) {
+    private static void playBeat(float s) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null) return;
+        float intensity = Math.max(0f, (s - ClientDreadState.SHAKE_START) / (1f - ClientDreadState.SHAKE_START));
+        float vol = 0.12f + intensity * 0.26f;
+        mc.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.NOTE_BLOCK_BASEDRUM.value(), vol, 0.5f));
+        ClientDreadState.vignettePulse = 0.65f + intensity * 0.35f;
+    }
+
+    // Collapse sounds — stumble when tilt starts, thud when nearly blacked out
+    private static void tickCollapseSounds(float s) {
+        if (s < ClientDreadState.FADE_START) {
+            playedStumble = false;
+            playedThud    = false;
+            return;
+        }
+
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null) return;
 
-        float intensity = Math.max(0f, (s - ClientDreadState.SHAKE_START)
-                        / (1f - ClientDreadState.SHAKE_START));
-        float vol = 0.12f + intensity * 0.22f;
+        // Stumble: play once when fade starts
+        if (!playedStumble) {
+            mc.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.PLAYER_HURT, 0.4f, 0.7f));
+            playedStumble = true;
+        }
 
-        mc.getSoundManager().play(
-            SimpleSoundInstance.forUI(SoundEvents.NOTE_BLOCK_BASEDRUM.value(), vol, 0.5f)
-        );
-
-        // Sync vignette pulse with each heartbeat — creates throb effect
-        ClientDreadState.vignettePulse = 0.7f + intensity * 0.3f;
+        // Thud: play once when nearly black
+        if (!playedThud && ClientDreadState.fadeAlpha >= 0.75f) {
+            mc.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.PLAYER_HURT, 0.6f, 0.5f));
+            playedThud = true;
+        }
     }
 }

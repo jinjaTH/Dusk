@@ -2,6 +2,7 @@ package com.dusk;
 
 import com.dusk.client.ClientDreadState;
 import com.dusk.effect.MovementEffects;
+import com.dusk.effect.PhantomEffects;
 import com.dusk.effect.SoundEffects;
 import com.dusk.effect.VisualEffects;
 import com.dusk.network.DreadStagePayload;
@@ -32,6 +33,7 @@ public class DuskClient implements ClientModInitializer {
             ClientDreadState.tick();
             SoundEffects.clientTick();
             MovementEffects.clientTick();
+            PhantomEffects.clientTick();
         });
 
         VisualEffects.register();

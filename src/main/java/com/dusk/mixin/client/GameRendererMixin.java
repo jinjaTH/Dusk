@@ -2,6 +2,7 @@ package com.dusk.mixin.client;
 
 import com.dusk.client.ClientDreadState;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.math.Axis;
 import net.minecraft.client.Camera;
 import net.minecraft.client.renderer.GameRenderer;
 import net.fabricmc.api.EnvType;
@@ -22,22 +23,27 @@ public class GameRendererMixin {
                            CallbackInfoReturnable<Float> cir) {
         float offset = ClientDreadState.fovOffset;
         if (offset == 0f) return;
-
-        // Add subtle breathing pulse on top of the narrowing — feels alive
         float pulse = (float)(Math.sin(System.currentTimeMillis() * 0.0022) * 0.8);
         cir.setReturnValue(cir.getReturnValue() + offset + pulse * ClientDreadState.shakeIntensity);
     }
 
-    // bobView runs every render frame — correct hook for continuous camera shake
+    // bobView runs every render frame — micro-shake + collapse tilt
     @Inject(method = "bobView", at = @At("RETURN"))
-    private void addShake(PoseStack poseStack, float partialTick, CallbackInfo ci) {
-        float intensity = ClientDreadState.shakeIntensity;
-        if (intensity < 0.01f) return;
+    private void addShakeAndTilt(PoseStack poseStack, float partialTick, CallbackInfo ci) {
+        float shake = ClientDreadState.shakeIntensity;
+        float tilt  = ClientDreadState.tiltAngle;
 
-        long t = System.currentTimeMillis();
-        // Two overlapping sine waves at different frequencies — organic tremor feel
-        float shakeX = (float)(Math.sin(t * 0.029) * 0.55 + Math.sin(t * 0.071) * 0.45) * intensity * 0.009f;
-        float shakeY = (float)(Math.cos(t * 0.023) * 0.60 + Math.cos(t * 0.053) * 0.40) * intensity * 0.005f;
-        poseStack.translate(shakeX, shakeY, 0f);
+        // Micro-shake: two overlapping sine waves for organic tremor
+        if (shake > 0.01f) {
+            long t = System.currentTimeMillis();
+            float sx = (float)(Math.sin(t * 0.029) * 0.55 + Math.sin(t * 0.071) * 0.45) * shake * 0.009f;
+            float sy = (float)(Math.cos(t * 0.023) * 0.60 + Math.cos(t * 0.053) * 0.40) * shake * 0.005f;
+            poseStack.translate(sx, sy, 0f);
+        }
+
+        // Collapse tilt: Z rotation — camera rolls as player loses consciousness
+        if (tilt > 0.05f) {
+            poseStack.mulPose(Axis.ZP.rotationDegrees(tilt));
+        }
     }
 }
