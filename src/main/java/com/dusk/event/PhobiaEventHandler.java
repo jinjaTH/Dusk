@@ -3,6 +3,7 @@ package com.dusk.event;
 import com.dusk.module.AcrophobiaModule;
 import com.dusk.module.NyctophobiaModule;
 import com.dusk.module.ThalassophobiaModule;
+import com.dusk.network.DuskNetwork;
 import com.dusk.tracker.DreadTracker;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
@@ -16,7 +17,6 @@ import java.util.UUID;
 
 public class PhobiaEventHandler {
 
-    // pending teleport countdown: UUID → ticks remaining
     private static final Map<UUID, Integer> pendingTeleports = new HashMap<>();
 
     public static void register() {
@@ -27,7 +27,6 @@ public class PhobiaEventHandler {
                 ThalassophobiaModule.tick(player);
             }
 
-            // Process delayed teleports
             pendingTeleports.entrySet().removeIf(entry -> {
                 int remaining = entry.getValue() - 1;
                 if (remaining <= 0) {
@@ -55,7 +54,12 @@ public class PhobiaEventHandler {
     }
 
     public static void triggerTeleport(ServerPlayer player) {
-        pendingTeleports.put(player.getUUID(), 10);
+        // putIfAbsent: don't restart countdown if already pending
+        pendingTeleports.putIfAbsent(player.getUUID(), 10);
+    }
+
+    public static boolean isTeleportPending(UUID uuid) {
+        return pendingTeleports.containsKey(uuid);
     }
 
     private static void executeSpawnTeleport(ServerPlayer player) {
@@ -70,6 +74,7 @@ public class PhobiaEventHandler {
                         pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5,
                         Collections.emptySet(),
                         player.getYRot(), player.getXRot(), false);
+                    resetAfterTeleport(player);
                     return;
                 }
             }
@@ -84,5 +89,23 @@ public class PhobiaEventHandler {
             spawn.getX() + 0.5, spawn.getY(), spawn.getZ() + 0.5,
             Collections.emptySet(),
             player.getYRot(), player.getXRot(), false);
+        resetAfterTeleport(player);
+    }
+
+    // Called after teleport completes — resets state and notifies client
+    // so fade clears only after player is already at spawn (matching CLAUDE.md design)
+    private static void resetAfterTeleport(ServerPlayer player) {
+        UUID uuid = player.getUUID();
+
+        if (DreadTracker.getStage(uuid, DreadTracker.NYCTO) != 0) {
+            DreadTracker.setDread(uuid, DreadTracker.NYCTO, 0);
+            DreadTracker.setStageAndGetOld(uuid, DreadTracker.NYCTO, 0);
+            DuskNetwork.sendStage(player, DreadTracker.NYCTO, 0);
+        }
+        if (DreadTracker.getStage(uuid, DreadTracker.THALA) != 0) {
+            DreadTracker.setExposure(uuid, DreadTracker.THALA, 0);
+            DreadTracker.setStageAndGetOld(uuid, DreadTracker.THALA, 0);
+            DuskNetwork.sendStage(player, DreadTracker.THALA, 0);
+        }
     }
 }
