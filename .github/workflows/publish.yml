@@ -19,7 +19,9 @@ jobs:
           distribution: 'temurin'
 
       - name: Build
-        run: ./gradlew build --no-daemon
+        run: |
+          chmod +x gradlew
+          ./gradlew build --no-daemon
 
       - name: Get jar path
         id: jar
