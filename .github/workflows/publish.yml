@@ -19,87 +19,77 @@ jobs:
           distribution: 'temurin'
 
       - name: Build
-        run: ./gradlew build --no-daemon
+        run: |
+          chmod +x gradlew
+          ./gradlew build --no-daemon
 
       - name: Get jar path
         id: jar
         run: |
-          JAR=$(ls build/libs/*-remapped.jar 2>/dev/null || ls build/libs/*.jar | grep -v sources | head -1)
+          ls -la build/libs/
+          JAR=$(ls build/libs/dusk-*-remapped.jar 2>/dev/null | head -1)
+          if [ -z "$JAR" ]; then
+            JAR=$(ls build/libs/dusk-*.jar | grep -v sources | head -1)
+          fi
           echo "path=$JAR" >> $GITHUB_OUTPUT
           echo "name=$(basename $JAR)" >> $GITHUB_OUTPUT
+          echo "Selected: $JAR"
 
       - name: Read gradle.properties
         id: props
         run: |
           MC=$(grep minecraft_version gradle.properties | cut -d= -f2)
-          LOADER=$(grep loader_version gradle.properties | cut -d= -f2)
           MOD=$(grep mod_version gradle.properties | cut -d= -f2)
           echo "mc=$MC" >> $GITHUB_OUTPUT
-          echo "loader=$LOADER" >> $GITHUB_OUTPUT
           echo "mod=$MOD" >> $GITHUB_OUTPUT
 
-      - name: Get or create Modrinth project
-        id: project
+      - name: Update project metadata
         env:
           MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
         run: |
-          # Try to fetch existing project
-          RESP=$(curl -sf -H "Authorization: $MODRINTH_TOKEN" \
-            "https://api.modrinth.com/v2/project/dusk" || echo "NOT_FOUND")
+          # Upload icon
+          curl -s -X PATCH \
+            -H "Authorization: $MODRINTH_TOKEN" \
+            -H "Content-Type: image/png" \
+            --data-binary @icon.png \
+            "https://api.modrinth.com/v2/project/dusk-nyctophobia/icon?ext=png" || true
 
-          if echo "$RESP" | grep -q '"id"'; then
-            ID=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
-            echo "id=$ID" >> $GITHUB_OUTPUT
-            echo "Project exists: $ID"
-          else
-            echo "Creating new project..."
-            BODY=$(python3 -c "
-          import json, sys
+          # Update description, body, license
+          BODY=$(python3 -c "
+          import json
           print(json.dumps({
-            'slug': 'dusk',
             'title': 'Dusk',
-            'description': 'Minecraft is quieter than you remember.',
-            'body': '''Something is different about the world.\n\nYou can't quite say what it is. The night feels longer. The silence is heavier than usual. You light a torch, and somehow it doesn't help.\n\nDusk is a Fabric mod that introduces real psychological phenomena into Minecraft gameplay. No jump scares. No monsters added. Nothing will tell you what is happening — you'll have to figure it out yourself.\n\nWhen it ends, everything returns to normal. Like nothing happened.''',
-            'project_types': ['mod'],
+            'description': 'A Fabric mod that makes darkness feel like it should.',
+            'body': 'Something is different about the world.\n\nYou cannot quite say what it is. The night feels longer. The silence is heavier than usual. You light a torch, and somehow it does not help.\n\nDusk is a Fabric mod that introduces real psychological phenomena into Minecraft gameplay. No jump scares. No monsters added. Nothing will tell you what is happening — you will have to figure it out yourself.\n\nWhen it ends, everything returns to normal. Like nothing happened.\n\n---\n\n## Requirements\n\n| Version | Minecraft | Fabric Loader | Fabric API | Java |\n|---|---|---|---|---|\n| 1.21.1 | 1.21.1 | ≥ 0.15.0 | 0.116.x | 21 |\n| 1.21.10 | 1.21.10 | ≥ 0.17.2 | 0.138.x | 21 |\n| 1.21.11 | 1.21.11 | ≥ 0.18.1 | 0.141.x | 21 |\n\n**Fabric API is required.**\n\n---\n\n## Credits\n\n[youtube.com/@jinjeTH](https://www.youtube.com/@jinjeTH/)',
+            'license_id': 'MIT',
             'categories': ['adventure'],
             'client_side': 'required',
             'server_side': 'required',
-            'license_id': 'MIT',
-            'is_draft': True
+            'link_urls': {'source': 'https://github.com/jinjaTH/Dusk'}
           }))
           ")
-            CREATE=$(curl -sf -X POST \
-              -H "Authorization: $MODRINTH_TOKEN" \
-              -H "Content-Type: application/json" \
-              -d "$BODY" \
-              "https://api.modrinth.com/v2/project")
-            ID=$(echo "$CREATE" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
-            echo "id=$ID" >> $GITHUB_OUTPUT
-            echo "Created project: $ID"
-          fi
-
-      - name: Upload icon
-        env:
-          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
-          PROJECT_ID: ${{ steps.project.outputs.id }}
-        run: |
-          if [ -f "icon.png" ]; then
-            curl -sf -X PATCH \
-              -H "Authorization: $MODRINTH_TOKEN" \
-              -F "icon=@icon.png;type=image/png" \
-              "https://api.modrinth.com/v2/project/$PROJECT_ID/icon" || true
-          fi
+          curl -s -X PATCH \
+            -H "Authorization: $MODRINTH_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$BODY" \
+            "https://api.modrinth.com/v2/project/dusk-nyctophobia"
 
       - name: Publish version
         env:
           MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
-          PROJECT_ID: ${{ steps.project.outputs.id }}
           MC_VERSION: ${{ steps.props.outputs.mc }}
           MOD_VERSION: ${{ steps.props.outputs.mod }}
           JAR_PATH: ${{ steps.jar.outputs.path }}
           JAR_NAME: ${{ steps.jar.outputs.name }}
           REF: ${{ github.ref_name }}
         run: |
+          PROJECT_ID=$(curl -s \
+            -H "Authorization: $MODRINTH_TOKEN" \
+            "https://api.modrinth.com/v2/project/dusk-nyctophobia" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+          echo "Project ID: $PROJECT_ID"
+
+          export PROJECT_ID
           META=$(python3 -c "
           import json, os
           mc = os.environ['MC_VERSION']
@@ -110,7 +100,7 @@ jobs:
             'version_number': f'{mod}+{mc}',
             'changelog': f'Release {ref}',
             'dependencies': [
-              {'version_type': 'required', 'project_id': 'P7dR8mSH'}
+              {'dependency_type': 'required', 'project_id': 'P7dR8mSH'}
             ],
             'game_versions': [mc],
             'version_type': 'release',
@@ -121,9 +111,15 @@ jobs:
           }))
           ")
 
-          curl -sf -X POST \
+          RESP=$(curl -s -w "\n%{http_code}" -X POST \
             -H "Authorization: $MODRINTH_TOKEN" \
             -F "data=$META" \
             -F "jar=@$JAR_PATH;filename=$JAR_NAME" \
-            "https://api.modrinth.com/v2/version"
+            "https://api.modrinth.com/v2/version")
+          HTTP=$(echo "$RESP" | tail -1)
+          BODY=$(echo "$RESP" | head -n -1)
+          echo "HTTP $HTTP: $BODY"
+          if [ "$HTTP" -lt 200 ] || [ "$HTTP" -ge 300 ]; then
+            exit 1
+          fi
           echo "Version published."
