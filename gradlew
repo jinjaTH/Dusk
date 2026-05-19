@@ -16,7 +16,7 @@ APP_NAME="Gradle"
 APP_BASE_NAME=`basename "$0"`
 APP_HOME="`dirname \"$0\"`"; APP_HOME="`( cd \"$APP_HOME\" && pwd )`"
 
-DEFAULT_JVM_OPTS='"-Xmx64m" "-Xms64m"'
+DEFAULT_JVM_OPTS='"-Xmx2g" "-Xms512m"'
 
 # Use the maximum available, or set MAX_FD != -1 to use that value.
 MAX_FD=maximum
