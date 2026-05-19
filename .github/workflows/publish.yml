@@ -19,9 +19,11 @@ jobs:
           distribution: 'temurin'
 
       - name: Build
+        env:
+          GRADLE_OPTS: "-Xmx2g -XX:MaxMetaspaceSize=512m"
         run: |
           chmod +x gradlew
-          ./gradlew build --no-daemon
+          ./gradlew build --no-daemon -Dorg.gradle.jvmargs=-Xmx2g
 
       - name: Get jar path
         id: jar
