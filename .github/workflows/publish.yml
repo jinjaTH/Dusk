@@ -63,6 +63,12 @@ jobs:
           JAR_NAME: ${{ steps.jar.outputs.name }}
           REF: ${{ github.ref_name }}
         run: |
+          PROJECT_ID=$(curl -s \
+            -H "Authorization: $MODRINTH_TOKEN" \
+            "https://api.modrinth.com/v2/project/dusk-nyctophobia" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+          echo "Project ID: $PROJECT_ID"
+
           META=$(python3 -c "
           import json, os
           mc = os.environ['MC_VERSION']
@@ -79,10 +85,10 @@ jobs:
             'version_type': 'release',
             'loaders': ['fabric'],
             'featured': True,
-            'project_id': 'dusk-nyctophobia',
+            'project_id': os.environ['PROJECT_ID'],
             'file_parts': ['jar']
           }))
-          ")
+          " PROJECT_ID="$PROJECT_ID")
 
           RESP=$(curl -s -w "\n%{http_code}" -X POST \
             -H "Authorization: $MODRINTH_TOKEN" \
