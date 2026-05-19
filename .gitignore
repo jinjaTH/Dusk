@@ -27,3 +27,5 @@ out/
 # Fabric Loom cache (can be regenerated)
 .loom/
 run/
+
+.claude/
