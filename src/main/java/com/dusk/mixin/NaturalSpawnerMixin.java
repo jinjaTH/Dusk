@@ -1,6 +1,5 @@
 package com.dusk.mixin;
 
-import com.dusk.tracker.DreadTracker;
 import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.level.NaturalSpawner;
 import net.minecraft.world.level.chunk.LevelChunk;
@@ -12,16 +11,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(NaturalSpawner.class)
 public class NaturalSpawnerMixin {
 
-    /**
-     * Block hostile mob spawning when any player is in Nyctophobia mode.
-     * Note: exact method signature may need adjustment for target MC version.
-     */
     @Inject(
         method = "spawnCategoryForChunk",
         at = @At("HEAD"),
         cancellable = true
     )
-    private static void onSpawnCategory(
+    private static void controlSpawns(
         MobCategory category,
         net.minecraft.server.level.ServerLevel level,
         LevelChunk chunk,
@@ -29,8 +24,13 @@ public class NaturalSpawnerMixin {
         NaturalSpawner.AfterSpawnCallback callback,
         CallbackInfo ci
     ) {
-        if (category == MobCategory.MONSTER && DreadTracker.anyInNyctophobia()) {
-            ci.cancel();
+        switch (category) {
+            case MONSTER -> ci.cancel(); // ไม่มีปิศาจเลย
+            case CREATURE, AMBIENT -> {
+                // passive animals และ ambient creatures หายาก 85%
+                if (Math.random() < 0.85) ci.cancel();
+            }
+            default -> {} // water creatures, underground water ฯลฯ ปกติ
         }
     }
 }
