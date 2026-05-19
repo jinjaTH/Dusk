@@ -43,16 +43,35 @@ jobs:
           echo "mc=$MC" >> $GITHUB_OUTPUT
           echo "mod=$MOD" >> $GITHUB_OUTPUT
 
-      - name: Upload icon
+      - name: Update project metadata
         env:
           MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
         run: |
-          if [ -f "icon.png" ]; then
-            curl -s -X PATCH \
-              -H "Authorization: $MODRINTH_TOKEN" \
-              -F "icon=@icon.png;type=image/png" \
-              "https://api.modrinth.com/v2/project/dusk-nyctophobia/icon" || true
-          fi
+          # Upload icon
+          curl -s -X PATCH \
+            -H "Authorization: $MODRINTH_TOKEN" \
+            -F "icon=@icon.png;type=image/png" \
+            "https://api.modrinth.com/v2/project/dusk-nyctophobia/icon" || true
+
+          # Update description, body, license
+          BODY=$(python3 -c "
+          import json
+          print(json.dumps({
+            'title': 'Dusk',
+            'description': 'A Fabric mod that makes darkness feel like it should.',
+            'body': 'Something is different about the world.\n\nYou cannot quite say what it is. The night feels longer. The silence is heavier than usual. You light a torch, and somehow it does not help.\n\nDusk is a Fabric mod that introduces real psychological phenomena into Minecraft gameplay. No jump scares. No monsters added. Nothing will tell you what is happening — you will have to figure it out yourself.\n\nWhen it ends, everything returns to normal. Like nothing happened.\n\n---\n\n## Requirements\n\n| Version | Minecraft | Fabric Loader | Fabric API | Java |\n|---|---|---|---|---|\n| 1.21.1 | 1.21.1 | ≥ 0.15.0 | 0.116.x | 21 |\n| 1.21.10 | 1.21.10 | ≥ 0.17.2 | 0.138.x | 21 |\n| 1.21.11 | 1.21.11 | ≥ 0.18.1 | 0.141.x | 21 |\n\n**Fabric API is required.**\n\n---\n\n## Credits\n\nCreated by **Dusk**',
+            'license_id': 'MIT',
+            'categories': ['adventure'],
+            'client_side': 'required',
+            'server_side': 'required',
+            'link_urls': {'source': 'https://github.com/jinjaTH/Dusk'}
+          }))
+          ")
+          curl -s -X PATCH \
+            -H "Authorization: $MODRINTH_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$BODY" \
+            "https://api.modrinth.com/v2/project/dusk-nyctophobia"
 
       - name: Publish version
         env:
