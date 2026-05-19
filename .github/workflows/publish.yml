@@ -26,82 +26,37 @@ jobs:
       - name: Get jar path
         id: jar
         run: |
-          echo "=== build/libs contents ==="
           ls -la build/libs/
           JAR=$(ls build/libs/dusk-*-remapped.jar 2>/dev/null | head -1)
           if [ -z "$JAR" ]; then
-            JAR=$(ls build/libs/dusk-*.jar | grep -v sources | grep -v remapped | head -1)
+            JAR=$(ls build/libs/dusk-*.jar | grep -v sources | head -1)
           fi
-          echo "Selected: $JAR"
           echo "path=$JAR" >> $GITHUB_OUTPUT
           echo "name=$(basename $JAR)" >> $GITHUB_OUTPUT
+          echo "Selected: $JAR"
 
       - name: Read gradle.properties
         id: props
         run: |
           MC=$(grep minecraft_version gradle.properties | cut -d= -f2)
-          LOADER=$(grep loader_version gradle.properties | cut -d= -f2)
           MOD=$(grep mod_version gradle.properties | cut -d= -f2)
           echo "mc=$MC" >> $GITHUB_OUTPUT
-          echo "loader=$LOADER" >> $GITHUB_OUTPUT
           echo "mod=$MOD" >> $GITHUB_OUTPUT
-
-      - name: Get or create Modrinth project
-        id: project
-        env:
-          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
-        run: |
-          # Try to fetch existing project
-          RESP=$(curl -sf -H "Authorization: $MODRINTH_TOKEN" \
-            "https://api.modrinth.com/v2/project/dusk" || echo "NOT_FOUND")
-
-          if echo "$RESP" | grep -q '"id"'; then
-            ID=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
-            echo "id=$ID" >> $GITHUB_OUTPUT
-            echo "Project exists: $ID"
-          else
-            echo "Creating new project..."
-            BODY=$(python3 -c "
-          import json, sys
-          print(json.dumps({
-            'slug': 'dusk',
-            'title': 'Dusk',
-            'description': 'Minecraft is quieter than you remember.',
-            'body': '''Something is different about the world.\n\nYou can't quite say what it is. The night feels longer. The silence is heavier than usual. You light a torch, and somehow it doesn't help.\n\nDusk is a Fabric mod that introduces real psychological phenomena into Minecraft gameplay. No jump scares. No monsters added. Nothing will tell you what is happening — you'll have to figure it out yourself.\n\nWhen it ends, everything returns to normal. Like nothing happened.''',
-            'project_types': ['mod'],
-            'categories': ['adventure'],
-            'client_side': 'required',
-            'server_side': 'required',
-            'license_id': 'MIT',
-            'is_draft': True
-          }))
-          ")
-            CREATE=$(curl -sf -X POST \
-              -H "Authorization: $MODRINTH_TOKEN" \
-              -H "Content-Type: application/json" \
-              -d "$BODY" \
-              "https://api.modrinth.com/v2/project")
-            ID=$(echo "$CREATE" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
-            echo "id=$ID" >> $GITHUB_OUTPUT
-            echo "Created project: $ID"
-          fi
 
       - name: Upload icon
         env:
           MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
-          PROJECT_ID: ${{ steps.project.outputs.id }}
         run: |
           if [ -f "icon.png" ]; then
-            curl -sf -X PATCH \
+            curl -s -X PATCH \
               -H "Authorization: $MODRINTH_TOKEN" \
               -F "icon=@icon.png;type=image/png" \
-              "https://api.modrinth.com/v2/project/$PROJECT_ID/icon" || true
+              "https://api.modrinth.com/v2/project/dusk-nyctophobia/icon" || true
           fi
 
       - name: Publish version
         env:
           MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
-          PROJECT_ID: ${{ steps.project.outputs.id }}
           MC_VERSION: ${{ steps.props.outputs.mc }}
           MOD_VERSION: ${{ steps.props.outputs.mod }}
           JAR_PATH: ${{ steps.jar.outputs.path }}
@@ -124,12 +79,11 @@ jobs:
             'version_type': 'release',
             'loaders': ['fabric'],
             'featured': True,
-            'project_id': os.environ['PROJECT_ID'],
+            'project_id': 'dusk-nyctophobia',
             'file_parts': ['jar']
           }))
           ")
 
-          echo "=== Uploading: $JAR_PATH ==="
           RESP=$(curl -s -w "\n%{http_code}" -X POST \
             -H "Authorization: $MODRINTH_TOKEN" \
             -F "data=$META" \
