@@ -44,7 +44,7 @@ public class NyctophobiaModule {
         }
 
         if (PhobiaEventHandler.isTeleportPending(player.getUUID())) {
-            applyEffect(player, MobEffects.SLOWNESS, 255);
+            applyEffect(player, MobEffects.MOVEMENT_SLOWDOWN, 255);
             return;
         }
 
@@ -101,17 +101,17 @@ public class NyctophobiaModule {
         // SLOWNESS — legs feel heavy, movement slows (0.25+)
         if (score >= 0.25f) {
             int amp = score >= 0.85f ? 2 : score >= 0.72f ? 1 : 0;
-            applyEffect(player, MobEffects.SLOWNESS, amp);
+            applyEffect(player, MobEffects.MOVEMENT_SLOWDOWN, amp);
         } else {
-            player.removeEffect(MobEffects.SLOWNESS);
+            player.removeEffect(MobEffects.MOVEMENT_SLOWDOWN);
         }
 
         // NAUSEA — subtle dizziness, screen begins to waver (0.58+)
         if (score >= 0.58f) {
             int amp = score >= 0.85f ? 1 : 0;
-            applyEffect(player, MobEffects.NAUSEA, amp);
+            applyEffect(player, MobEffects.CONFUSION, amp);
         } else {
-            player.removeEffect(MobEffects.NAUSEA);
+            player.removeEffect(MobEffects.CONFUSION);
         }
     }
 
@@ -126,8 +126,8 @@ public class NyctophobiaModule {
 
     public static void removeAllEffects(ServerPlayer player) {
         player.removeEffect(MobEffects.DARKNESS);
-        player.removeEffect(MobEffects.SLOWNESS);
-        player.removeEffect(MobEffects.NAUSEA);
+        player.removeEffect(MobEffects.MOVEMENT_SLOWDOWN);
+        player.removeEffect(MobEffects.CONFUSION);
     }
 
     private static void reset(ServerPlayer player) {
