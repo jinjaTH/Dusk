@@ -1,0 +1,129 @@
+name: Publish to Modrinth
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Build
+        run: ./gradlew build --no-daemon
+
+      - name: Get jar path
+        id: jar
+        run: |
+          JAR=$(ls build/libs/*-remapped.jar 2>/dev/null || ls build/libs/*.jar | grep -v sources | head -1)
+          echo "path=$JAR" >> $GITHUB_OUTPUT
+          echo "name=$(basename $JAR)" >> $GITHUB_OUTPUT
+
+      - name: Read gradle.properties
+        id: props
+        run: |
+          MC=$(grep minecraft_version gradle.properties | cut -d= -f2)
+          LOADER=$(grep loader_version gradle.properties | cut -d= -f2)
+          MOD=$(grep mod_version gradle.properties | cut -d= -f2)
+          echo "mc=$MC" >> $GITHUB_OUTPUT
+          echo "loader=$LOADER" >> $GITHUB_OUTPUT
+          echo "mod=$MOD" >> $GITHUB_OUTPUT
+
+      - name: Get or create Modrinth project
+        id: project
+        env:
+          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+        run: |
+          # Try to fetch existing project
+          RESP=$(curl -sf -H "Authorization: $MODRINTH_TOKEN" \
+            "https://api.modrinth.com/v2/project/dusk" || echo "NOT_FOUND")
+
+          if echo "$RESP" | grep -q '"id"'; then
+            ID=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+            echo "id=$ID" >> $GITHUB_OUTPUT
+            echo "Project exists: $ID"
+          else
+            echo "Creating new project..."
+            BODY=$(python3 -c "
+          import json, sys
+          print(json.dumps({
+            'slug': 'dusk',
+            'title': 'Dusk',
+            'description': 'Minecraft is quieter than you remember.',
+            'body': '''Something is different about the world.\n\nYou can't quite say what it is. The night feels longer. The silence is heavier than usual. You light a torch, and somehow it doesn't help.\n\nDusk is a Fabric mod that introduces real psychological phenomena into Minecraft gameplay. No jump scares. No monsters added. Nothing will tell you what is happening — you'll have to figure it out yourself.\n\nWhen it ends, everything returns to normal. Like nothing happened.''',
+            'project_types': ['mod'],
+            'categories': ['adventure'],
+            'client_side': 'required',
+            'server_side': 'required',
+            'license_id': 'MIT',
+            'is_draft': True
+          }))
+          ")
+            CREATE=$(curl -sf -X POST \
+              -H "Authorization: $MODRINTH_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "$BODY" \
+              "https://api.modrinth.com/v2/project")
+            ID=$(echo "$CREATE" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+            echo "id=$ID" >> $GITHUB_OUTPUT
+            echo "Created project: $ID"
+          fi
+
+      - name: Upload icon
+        env:
+          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+          PROJECT_ID: ${{ steps.project.outputs.id }}
+        run: |
+          if [ -f "icon.png" ]; then
+            curl -sf -X PATCH \
+              -H "Authorization: $MODRINTH_TOKEN" \
+              -F "icon=@icon.png;type=image/png" \
+              "https://api.modrinth.com/v2/project/$PROJECT_ID/icon" || true
+          fi
+
+      - name: Publish version
+        env:
+          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+          PROJECT_ID: ${{ steps.project.outputs.id }}
+          MC_VERSION: ${{ steps.props.outputs.mc }}
+          MOD_VERSION: ${{ steps.props.outputs.mod }}
+          JAR_PATH: ${{ steps.jar.outputs.path }}
+          JAR_NAME: ${{ steps.jar.outputs.name }}
+          REF: ${{ github.ref_name }}
+        run: |
+          META=$(python3 -c "
+          import json, os
+          mc = os.environ['MC_VERSION']
+          mod = os.environ['MOD_VERSION']
+          ref = os.environ['REF']
+          print(json.dumps({
+            'name': f'Dusk {mod} for {mc}',
+            'version_number': f'{mod}+{mc}',
+            'changelog': f'Release {ref}',
+            'dependencies': [
+              {'version_type': 'required', 'project_id': 'P7dR8mSH'}
+            ],
+            'game_versions': [mc],
+            'version_type': 'release',
+            'loaders': ['fabric'],
+            'featured': True,
+            'project_id': os.environ['PROJECT_ID'],
+            'file_parts': ['jar']
+          }))
+          ")
+
+          curl -sf -X POST \
+            -H "Authorization: $MODRINTH_TOKEN" \
+            -F "data=$META" \
+            -F "jar=@$JAR_PATH;filename=$JAR_NAME" \
+            "https://api.modrinth.com/v2/version"
+          echo "Version published."
