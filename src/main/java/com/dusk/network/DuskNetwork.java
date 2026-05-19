@@ -10,8 +10,16 @@ public class DuskNetwork {
         PayloadTypeRegistry.playS2C().register(DreadStagePayload.TYPE, DreadStagePayload.CODEC);
     }
 
+    // Normal score update — client lerps toward this value.
+    // Used for both build-up and light-recovery (soft fade back to sanity).
     public static void sendScore(ServerPlayer player, float score) {
         int encoded = Math.round(Math.max(0f, Math.min(1f, score)) * 10000f);
-        ServerPlayNetworking.send(player, new DreadStagePayload(encoded));
+        ServerPlayNetworking.send(player, new DreadStagePayload(encoded, false));
+    }
+
+    // Hard reset — client snaps every effect to 0 with no transition.
+    // Used after teleport so the player wakes at spawn cleanly.
+    public static void sendHardReset(ServerPlayer player) {
+        ServerPlayNetworking.send(player, new DreadStagePayload(0, true));
     }
 }

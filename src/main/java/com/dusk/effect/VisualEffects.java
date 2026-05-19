@@ -50,20 +50,38 @@ public class VisualEffects {
         g.fillGradient(0, 0, w, vigH,      dark,  clear);
         g.fillGradient(0, h - vigH, w, h,  clear, dark);
 
-        // Left: per-pixel vertical strips, cubic falloff
+        // Left: per-pixel vertical strips, cubic falloff — full height so y1 < y2 always
         for (int x = 0; x < vigW; x += 2) {
             float t = 1f - (float) x / vigW;
             int a = (int)(alpha * t * t * t * 210);
             if (a < 2) break;
-            g.fill(x, vigH, x + 2, h - vigH, (a << 24));
+            g.fill(x, 0, x + 2, h, (a << 24));
         }
         // Right: mirrored
         for (int x = 0; x < vigW; x += 2) {
             float t = 1f - (float) x / vigW;
             int a = (int)(alpha * t * t * t * 210);
             if (a < 2) break;
-            g.fill(w - x - 2, vigH, w - x, h - vigH, (a << 24));
+            g.fill(w - x - 2, 0, w - x, h, (a << 24));
         }
+    }
+
+    // Food bar sinks off the bottom — overlay that clips the food bar area from below.
+    // Triggers slightly after the hotbar falls (score 0.78+).
+    private static void renderFoodBarSink(GuiGraphics g, int w, int h) {
+        float s = ClientDreadState.score;
+        float FOOD_START = 0.78f;
+        if (s < FOOD_START) return;
+
+        float t = Math.min(1f, (s - FOOD_START) / (ClientDreadState.FADE_START - FOOD_START));
+        float fall = t * t * t * t;
+        int cover = (int)(fall * 100f);
+        if (cover <= 0) return;
+
+        // Food bar is to the right of center, same Y row as hearts (~h-49 to h-27)
+        int foodLeft  = w / 2 + 10;
+        int foodRight = w / 2 + 91;
+        g.fill(foodLeft, h - cover, foodRight, h, 0xFF000000);
     }
 
     // Phantom shadow: brief dark humanoid silhouette at mid-screen
@@ -96,7 +114,8 @@ public class VisualEffects {
     private static void renderFade(GuiGraphics g, int w, int h) {
         float fa = ClientDreadState.fadeAlpha;
         if (fa < 0.01f) return;
-        g.fill(0, 0, w, h, ((int)(fa * 255) << 24));
+        int color = ((int)(fa * 255) << 24);
+        g.fillGradient(0, 0, w, h, color, color);
     }
 
     // Spawn flicker at random screen corner when score in range

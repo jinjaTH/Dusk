@@ -19,7 +19,8 @@ public class NyctophobiaModule {
     private static final double MAX_DREAD  = 1500.0;
     private static final int    SEND_EVERY = 4;
 
-    private static final Map<UUID, Integer> tickCounters = new HashMap<>();
+    private static final Map<UUID, Integer> tickCounters   = new HashMap<>();
+    private static final Map<UUID, Integer> spawnImmunity  = new HashMap<>();
 
     public static void tick(ServerPlayer player) {
         if (player.isCreative() || player.isSpectator()) {
@@ -34,21 +35,37 @@ public class NyctophobiaModule {
         }
 
         BlockPos pos = player.blockPosition();
-        int light = level.getBrightness(LightLayer.BLOCK, pos);
-
-        if (light > 4) {
+        // Combined light (sky+block, time-adjusted) — clears dread during daytime.
+        // Threshold 6: daytime (15) resets, night (4-5) triggers, dusk borderline.
+        int combinedLight = level.getMaxLocalRawBrightness(pos);
+        if (combinedLight > 6) {
             reset(player);
             return;
         }
 
-        if (PhobiaEventHandler.isTeleportPending(player.getUUID())) return;
+        if (PhobiaEventHandler.isTeleportPending(player.getUUID())) {
+            applyEffect(player, MobEffects.SLOWNESS, 255);
+            return;
+        }
 
-        double darknessMultiplier = switch (light) {
+        // Post-teleport immunity — don't rebuild dread at a dark spawn for 10 seconds
+        UUID uuid0 = player.getUUID();
+        int imm = spawnImmunity.getOrDefault(uuid0, 0);
+        if (imm > 0) {
+            spawnImmunity.put(uuid0, imm - 1);
+            return;
+        }
+
+        // Block light drives the multiplier — night outdoors has block=0 → full 1.00,
+        // same urgency as a pitch-dark cave. Torches raise block light and slow the rate.
+        int blockLight = level.getBrightness(LightLayer.BLOCK, pos);
+        double darknessMultiplier = switch (blockLight) {
             case 0 -> 1.00;
             case 1 -> 0.80;
             case 2 -> 0.55;
             case 3 -> 0.30;
-            default -> 0.12;
+            case 4 -> 0.12;
+            default -> 0.05;
         };
 
         UUID uuid = player.getUUID();
@@ -66,7 +83,7 @@ public class NyctophobiaModule {
         }
 
         if (score >= 1.0f) {
-            PhobiaEventHandler.triggerTeleport(player);
+            PhobiaEventHandler.triggerTeleport(player, 10);
         }
     }
 
@@ -120,6 +137,18 @@ public class NyctophobiaModule {
         DreadTracker.setDread(uuid, DreadTracker.NYCTO, 0);
         tickCounters.put(uuid, 0);
         removeAllEffects(player);
+        // Heal to full when finding light — HP/food lost during dread restore
+        player.setHealth(player.getMaxHealth());
+        player.getFoodData().setFoodLevel(20);
         DuskNetwork.sendScore(player, 0f);
+    }
+
+    public static void grantSpawnImmunity(UUID uuid) {
+        spawnImmunity.put(uuid, 200);  // 10 seconds of grace at spawn
+    }
+
+    public static void removePlayer(UUID uuid) {
+        tickCounters.remove(uuid);
+        spawnImmunity.remove(uuid);
     }
 }

@@ -43,14 +43,16 @@ public class PhobiaEventHandler {
 
         ServerEntityEvents.ENTITY_UNLOAD.register((entity, level) -> {
             if (entity instanceof ServerPlayer player) {
-                DreadTracker.remove(player.getUUID());
-                pendingTeleports.remove(player.getUUID());
+                UUID uuid = player.getUUID();
+                DreadTracker.remove(uuid);
+                pendingTeleports.remove(uuid);
+                NyctophobiaModule.removePlayer(uuid);
             }
         });
     }
 
-    public static void triggerTeleport(ServerPlayer player) {
-        pendingTeleports.putIfAbsent(player.getUUID(), 10);
+    public static void triggerTeleport(ServerPlayer player, int delayTicks) {
+        pendingTeleports.putIfAbsent(player.getUUID(), delayTicks);
     }
 
     public static boolean isTeleportPending(UUID uuid) {
@@ -88,10 +90,11 @@ public class PhobiaEventHandler {
     }
 
     private static void resetAfterTeleport(ServerPlayer player) {
-        // Remove all invisible effects — must happen before score=0 packet
-        // so client and server clear simultaneously
         NyctophobiaModule.removeAllEffects(player);
         DreadTracker.setDread(player.getUUID(), DreadTracker.NYCTO, 0);
-        DuskNetwork.sendScore(player, 0f);
+        NyctophobiaModule.grantSpawnImmunity(player.getUUID());
+        player.setHealth(player.getMaxHealth());
+        player.getFoodData().setFoodLevel(20);
+        DuskNetwork.sendHardReset(player);
     }
 }

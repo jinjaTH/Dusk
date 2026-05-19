@@ -12,11 +12,24 @@ import net.minecraft.world.entity.player.Player;
 public class PhantomEffects {
 
     private static final RandomSource RNG = RandomSource.create();
+    private static boolean collapsePhantomSpawned = false;
 
-    // Called every client tick — spawns in-world particles client-side only
-    // Player sees these in 3D space with proper depth and perspective
     public static void clientTick() {
         float s = ClientDreadState.score;
+
+        // Reset collapse phantom flag when not in collapse
+        if (ClientDreadState.fadeAlpha < 0.05f) collapsePhantomSpawned = false;
+
+        // Phase 3 of collapse (head lifting, fade 0.55→0.82) — spawn phantom directly in front
+        if (!collapsePhantomSpawned && ClientDreadState.fadeAlpha >= 0.55f) {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.level != null && mc.player != null) {
+                spawnFigureInFront(mc, mc.player);
+                collapsePhantomSpawned = true;
+            }
+        }
+
+        // Normal random phantom during high dread
         if (s < ClientDreadState.SHADOW_START) return;
         if (ClientDreadState.phantomFigureCooldown > 0) return;
 
@@ -35,34 +48,61 @@ public class PhantomEffects {
         ClientDreadState.phantomFigureCooldown = 280 + RNG.nextInt(350);
     }
 
-    // Spawn SMOKE particles in a humanoid shape at a random world position
-    // 5–12 blocks from player — visible in 3D, drifts upward, dissipates naturally
+    // Spawn phantom directly in the player's look direction — seen when head lifts during collapse.
+    private static void spawnFigureInFront(Minecraft mc, Player player) {
+        var look = player.getLookAngle();
+        // Horizontal only — figure stands on ground, not floating
+        double len = Math.sqrt(look.x * look.x + look.z * look.z);
+        if (len < 0.001) return;
+        double dx = look.x / len;
+        double dz = look.z / len;
+
+        double fx = player.getX() + dx * 3.5;
+        double fy = player.getY() - 0.2;  // at foot level
+        double fz = player.getZ() + dz * 3.5;
+
+        // Dense body
+        for (int i = 0; i < 60; i++) {
+            double bx = fx + (RNG.nextDouble() - 0.5) * 0.18;
+            double by = fy + (i / 60.0) * 1.9;
+            double bz = fz + (RNG.nextDouble() - 0.5) * 0.18;
+            mc.level.addParticle(ParticleTypes.SOUL, bx, by, bz, 0, 0.002, 0);
+        }
+        // Head
+        for (int i = 0; i < 25; i++) {
+            double hx = fx + (RNG.nextDouble() - 0.5) * 0.26;
+            double hy = fy + 1.95 + (RNG.nextDouble() - 0.5) * 0.18;
+            double hz = fz + (RNG.nextDouble() - 0.5) * 0.26;
+            mc.level.addParticle(ParticleTypes.SOUL, hx, hy, hz, 0, 0.001, 0);
+        }
+    }
+
+    // Spawn SOUL particles in a humanoid shape — glowing blue wisps visible in darkness.
+    // 4–10 blocks from player so player notices but can't immediately identify it.
     private static void spawnFigure(Minecraft mc, Player player, float intensity) {
         double angle = RNG.nextDouble() * Math.PI * 2;
-        double dist  = 5.0 + RNG.nextDouble() * 7.0;
+        double dist  = 4.0 + RNG.nextDouble() * 6.0;
 
         double fx = player.getX() + Math.sin(angle) * dist;
         double fz = player.getZ() + Math.cos(angle) * dist;
-        // Stand on roughly the same Y as player
-        double fy = player.getY() + (RNG.nextDouble() - 0.5) * 1.5;
+        double fy = player.getY() + (RNG.nextDouble() - 0.5) * 0.5;
 
-        // Body: tall column of smoke (~1.8 blocks tall, narrow)
-        int bodyParticles = 18 + (int)(intensity * 10);
+        // Body: dense column of soul wisps (~1.8 blocks tall)
+        int bodyParticles = 40 + (int)(intensity * 20);
         for (int i = 0; i < bodyParticles; i++) {
-            double bx = fx + (RNG.nextDouble() - 0.5) * 0.25;
+            double bx = fx + (RNG.nextDouble() - 0.5) * 0.20;
             double by = fy + (i / (double) bodyParticles) * 1.8;
-            double bz = fz + (RNG.nextDouble() - 0.5) * 0.25;
-            // Very slow upward drift — figure looks like it's "breathing"
-            mc.level.addParticle(ParticleTypes.LARGE_SMOKE, bx, by, bz, 0, 0.006, 0);
+            double bz = fz + (RNG.nextDouble() - 0.5) * 0.20;
+            mc.level.addParticle(ParticleTypes.SOUL, bx, by, bz, 0, 0.004, 0);
         }
 
-        // Head: denser cluster at top
-        int headParticles = 8 + (int)(intensity * 5);
+        // Head: tighter cluster at top
+        int headParticles = 20 + (int)(intensity * 10);
         for (int i = 0; i < headParticles; i++) {
-            double hx = fx + (RNG.nextDouble() - 0.5) * 0.35;
-            double hy = fy + 1.85 + (RNG.nextDouble() - 0.5) * 0.25;
-            double hz = fz + (RNG.nextDouble() - 0.5) * 0.35;
-            mc.level.addParticle(ParticleTypes.LARGE_SMOKE, hx, hy, hz, 0, 0.003, 0);
+            double hx = fx + (RNG.nextDouble() - 0.5) * 0.28;
+            double hy = fy + 1.85 + (RNG.nextDouble() - 0.5) * 0.20;
+            double hz = fz + (RNG.nextDouble() - 0.5) * 0.28;
+            mc.level.addParticle(ParticleTypes.SOUL, hx, hy, hz, 0, 0.002, 0);
         }
     }
 }

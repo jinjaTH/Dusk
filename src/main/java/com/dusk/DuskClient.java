@@ -19,11 +19,16 @@ public class DuskClient implements ClientModInitializer {
     public void onInitializeClient() {
         ClientPlayNetworking.registerGlobalReceiver(DreadStagePayload.TYPE, (payload, context) -> {
             context.client().execute(() -> {
-                float score = payload.normalizedScore();
-                if (score <= 0f) {
+                if (payload.hardReset()) {
                     ClientDreadState.reset();
+                    SoundEffects.stopAllDuskSounds();
+                    context.client().getSoundManager().play(
+                        net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(
+                            net.minecraft.sounds.SoundEvents.PLAYER_BREATH, 0.55f, 0.85f));
                 } else {
-                    ClientDreadState.targetScore = score;
+                    // Normal update — let lerp handle the transition.
+                    // For light recovery (target=0), the lerp feels like consciousness returning.
+                    ClientDreadState.targetScore = payload.normalizedScore();
                 }
             });
         });
@@ -34,6 +39,12 @@ public class DuskClient implements ClientModInitializer {
             SoundEffects.clientTick();
             MovementEffects.clientTick();
             PhantomEffects.clientTick();
+
+            // Block inventory when hotbar has fallen (score >= 0.78)
+            if (ClientDreadState.score >= 0.78f
+                    && client.screen instanceof net.minecraft.client.gui.screens.inventory.InventoryScreen) {
+                client.setScreen(null);
+            }
         });
 
         VisualEffects.register();

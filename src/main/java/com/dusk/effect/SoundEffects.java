@@ -5,7 +5,10 @@ import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
+import net.minecraft.client.resources.sounds.SoundInstance;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.RandomSource;
 
 @Environment(EnvType.CLIENT)
@@ -13,9 +16,9 @@ public class SoundEffects {
 
     private static final RandomSource RNG = RandomSource.create();
 
-    // --- Breathing ---
-    private static int breathCooldown  = 0;
-    private static boolean nextIsExhale = false;
+    // --- Heavy breathing (one-shot at score 0.62, stopped on teleport) ---
+    private static boolean playedBreatheHeavy = false;
+    private static SoundInstance breatheHeavyInstance = null;
 
     // --- Approaching footsteps state machine ---
     private static int  footstepState   = 0;   // 0=idle, 1-4=steps, 5=aftermath
@@ -30,48 +33,97 @@ public class SoundEffects {
     private static boolean playedStumble   = false;
     private static boolean playedThud      = false;
 
+    // --- Atmosphere (long loop, tracked for explicit stop on reset) ---
+    private static int  atmosphereCooldown = 0;
+    private static SoundInstance atmosphereInstance = null;
+
+    // --- Whispers (random hallucinated voices) ---
+    private static int  whisperCooldown    = 0;
+
     public static void clientTick() {
         float s = ClientDreadState.score;
         if (s <= 0.01f) {
-            breathCooldown  = 0; nextIsExhale  = false;
-            footstepState   = 0; footstepTimer = 0;
-            heartbeatCooldown = 0; waitSecondBeat = false;
-            playedStumble = false; playedThud = false;
+            stopAllDuskSounds();
+            footstepState      = 0; footstepTimer = 0;
+            heartbeatCooldown  = 0; waitSecondBeat = false;
+            playedStumble      = false; playedThud = false;
+            atmosphereCooldown = 0;
+            whisperCooldown    = 0;
             return;
         }
 
+        tickAtmosphere(s);
         tickBreathing(s);
         tickApproachingFootsteps(s);
         tickHeartbeat(s);
+        tickWhispers(s);
         tickCollapseSounds(s);
     }
 
-    // Breathing — starts quiet and close, gets heavier with intensity
-    // PLAYER_BREATH for inhale feel, DROWNED_AMBIENT for exhale (labored)
+    // Heavy breathing — fires ONCE at score 0.60 (dread=900).
+    // At light=0: 900→1500 = exactly 600 ticks = 30s file → ends at teleport.
     private static void tickBreathing(float s) {
-        if (s < ClientDreadState.PHANTOM_START) return;
-        if (--breathCooldown > 0) return;
-
-        float intensity = (s - ClientDreadState.PHANTOM_START) / (1f - ClientDreadState.PHANTOM_START);
-        intensity = Math.min(1f, intensity);
+        if (s < 0.60f) {
+            playedBreatheHeavy = false;
+            breatheHeavyInstance = null;
+            return;
+        }
+        if (playedBreatheHeavy) return;
 
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null) return;
 
-        if (!nextIsExhale) {
-            // Inhale: PLAYER_BREATH, quiet, pitched slightly high
-            float vol = 0.06f + intensity * 0.10f;
-            mc.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.PLAYER_BREATH, vol, 1.1f + RNG.nextFloat() * 0.15f));
-            breathCooldown = 14; // short gap between inhale and exhale
-            nextIsExhale = true;
-        } else {
-            // Exhale: DROWNED_AMBIENT, slightly louder, low pitch — sounds like labored breath
-            float vol = 0.05f + intensity * 0.09f;
-            mc.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.DROWNED_AMBIENT, vol, 1.4f + RNG.nextFloat() * 0.2f));
-            // Cooldown until next breath cycle — shorter at high score (faster breathing)
-            breathCooldown = (int)(60f - intensity * 35f) + RNG.nextInt(20);
-            nextIsExhale = false;
+        breatheHeavyInstance = duskUI("breathe_heavy", 1.0f, 1.0f);
+        mc.getSoundManager().play(breatheHeavyInstance);
+        playedBreatheHeavy = true;
+    }
+
+    public static void stopAllDuskSounds() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc != null) {
+            if (breatheHeavyInstance != null) mc.getSoundManager().stop(breatheHeavyInstance);
+            if (atmosphereInstance  != null) mc.getSoundManager().stop(atmosphereInstance);
         }
+        breatheHeavyInstance = null;
+        atmosphereInstance   = null;
+        playedBreatheHeavy   = false;
+    }
+
+    // Atmosphere — looping low rumble. Replays every ~30s.
+    // Assumes the .ogg the user drops in is roughly 25-35s long.
+    private static void tickAtmosphere(float s) {
+        if (s < ClientDreadState.PHANTOM_START) return;
+        if (--atmosphereCooldown > 0) return;
+
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null) return;
+
+        float intensity = (s - ClientDreadState.PHANTOM_START) / (1f - ClientDreadState.PHANTOM_START);
+        intensity = Math.min(1f, intensity);
+
+        float vol = 0.60f + intensity * 0.30f;  // 0.60 → 0.90
+        atmosphereInstance = duskUI("atmosphere", vol, 1.0f);
+        mc.getSoundManager().play(atmosphereInstance);
+
+        atmosphereCooldown = 720 + RNG.nextInt(60);  // 36-39s for 38s atmosphere file
+    }
+
+    // Hallucinated whispers — ~4 times across the full episode from PHANTOM_START.
+    private static void tickWhispers(float s) {
+        if (s < ClientDreadState.PHANTOM_START) return;
+        if (--whisperCooldown > 0) return;
+
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null) return;
+
+        float intensity = (s - ClientDreadState.PHANTOM_START) / (1f - ClientDreadState.PHANTOM_START);
+        intensity = Math.min(1f, intensity);
+
+        float vol   = 0.60f + intensity * 0.35f;  // 0.60 → 0.95
+        float pitch = 0.85f + RNG.nextFloat() * 0.30f;
+        mc.getSoundManager().play(duskUI("whisper", vol, pitch));
+
+        whisperCooldown = 280 + RNG.nextInt(120);  // 14-20s → ~4 whispers per episode
     }
 
     // Approaching footsteps event — 4 steps getting louder, then silence
@@ -166,8 +218,8 @@ public class SoundEffects {
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null) return;
         float intensity = Math.max(0f, (s - ClientDreadState.SHAKE_START) / (1f - ClientDreadState.SHAKE_START));
-        float vol = 0.12f + intensity * 0.26f;
-        mc.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.NOTE_BLOCK_BASEDRUM.value(), vol, 0.5f));
+        float vol = 3.0f + intensity * 2.0f;  // 3.0 → 5.0 (bass freq ได้ยินยาก)
+        mc.getSoundManager().play(duskUI("heartbeat", vol, 1.0f));
         ClientDreadState.vignettePulse = 0.65f + intensity * 0.35f;
     }
 
@@ -182,16 +234,27 @@ public class SoundEffects {
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null) return;
 
-        // Stumble: play once when fade starts
         if (!playedStumble) {
-            mc.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.PLAYER_HURT, 0.4f, 0.7f));
+            mc.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.PLAYER_HURT, 0.35f, 0.7f));
+            ClientDreadState.collapseJolt = 1.0f;  // trigger impact shake + fast fade
             playedStumble = true;
         }
 
-        // Thud: play once when nearly black
+        // Thud: play once when nearly black — body hits the ground
         if (!playedThud && ClientDreadState.fadeAlpha >= 0.75f) {
-            mc.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.PLAYER_HURT, 0.6f, 0.5f));
+            mc.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.PLAYER_HURT, 0.5f, 0.5f));
             playedThud = true;
         }
+    }
+
+    // Creates a UI-style (non-positional, MASTER channel) sound instance directly
+    // from the mod's sounds.json — bypasses SoundEvent registry lookup entirely.
+    private static SimpleSoundInstance duskUI(String name, float vol, float pitch) {
+        return new SimpleSoundInstance(
+            ResourceLocation.fromNamespaceAndPath("dusk", name),
+            SoundSource.MASTER, vol, pitch,
+            RandomSource.createNewThreadLocalInstance(),
+            false, 0, SoundInstance.Attenuation.NONE, 0, 0, 0, true
+        );
     }
 }

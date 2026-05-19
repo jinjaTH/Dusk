@@ -1,0 +1,26 @@
+{
+  "breathe_heavy": {
+    "category": "ambient",
+    "sounds": [
+      { "name": "dusk:breathe_heavy", "stream": true }
+    ]
+  },
+  "heartbeat": {
+    "category": "ambient",
+    "sounds": [
+      { "name": "dusk:heartbeat", "stream": false }
+    ]
+  },
+  "atmosphere": {
+    "category": "ambient",
+    "sounds": [
+      { "name": "dusk:atmosphere", "stream": true }
+    ]
+  },
+  "whisper": {
+    "category": "ambient",
+    "sounds": [
+      { "name": "dusk:whisper", "stream": false }
+    ]
+  }
+}

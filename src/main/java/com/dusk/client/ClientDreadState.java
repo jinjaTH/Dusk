@@ -47,13 +47,21 @@ public class ClientDreadState {
 
     // Collapse camera tilt (Z rotation in degrees) — builds at FADE_START
     public static float tiltAngle      = 0f;
+    // One-shot impact jolt when player collapses — decays quickly
+    public static float collapseJolt   = 0f;
 
     // Phantom figure (in-world particles) cooldown
     public static int   phantomFigureCooldown = 0;
 
     public static void tick() {
         float diff = targetScore - score;
-        score += diff * (diff > 0 ? 0.030f : 0.055f);
+        // Lerp rates: slow build-up (0.030), normal decay (0.055),
+        // fast "snap back to sanity" when light recovers (target == 0, ~1s to clear).
+        float rate;
+        if (diff > 0)             rate = 0.030f;
+        else if (targetScore == 0f) rate = 0.03f;
+        else                       rate = 0.055f;
+        score += diff * rate;
         if (Math.abs(diff) < 0.0005f) score = targetScore;
         score = Math.max(0f, Math.min(1f, score));
 
@@ -63,7 +71,9 @@ public class ClientDreadState {
         shakeIntensity = smooth(SHAKE_START, 0.96f, score);
 
         if (score >= FADE_START) {
-            fadeAlpha = Math.min(1f, fadeAlpha + 0.012f);
+            // Jolt accelerates the fade — "losing consciousness after impact"
+            float fadeRate = collapseJolt > 0.3f ? 0.08f : 0.012f;
+            fadeAlpha = Math.min(1f, fadeAlpha + fadeRate);
         } else {
             fadeAlpha = Math.max(0f, fadeAlpha - 0.04f);
         }
@@ -71,9 +81,12 @@ public class ClientDreadState {
         // Pulse decay each tick
         if (vignettePulse > 0f) vignettePulse = Math.max(0f, vignettePulse - 0.06f);
 
-        // Collapse camera tilt — only during fade stage
-        float targetTilt = smooth(FADE_START, 1.0f, score) * 13f;
+        // Collapse camera tilt — up to 25° when fully faded
+        float targetTilt = smooth(FADE_START, 1.0f, score) * 25f;
         tiltAngle += (targetTilt - tiltAngle) * 0.04f;
+
+        // Jolt decays quickly — only used for the impact frame
+        if (collapseJolt > 0f) collapseJolt = Math.max(0f, collapseJolt - 0.15f);
 
         // Cooldowns
         if (flickerAlpha   > 0f) flickerAlpha   = Math.max(0f, flickerAlpha   - 0.25f);
@@ -98,6 +111,7 @@ public class ClientDreadState {
         shadowAlpha    = 0f;
         shadowCooldown = 0;
         tiltAngle      = 0f;
+        collapseJolt   = 0f;
         phantomFigureCooldown = 0;
     }
 

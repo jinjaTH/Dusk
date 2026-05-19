@@ -27,11 +27,18 @@ public class GameRendererMixin {
         cir.setReturnValue(cir.getReturnValue() + offset + pulse * ClientDreadState.shakeIntensity);
     }
 
-    // bobView runs every render frame — micro-shake + collapse tilt
+    // bobView runs every render frame — micro-shake + collapse tilt + impact jolt
     @Inject(method = "bobView", at = @At("RETURN"))
     private void addShakeAndTilt(PoseStack poseStack, float partialTick, CallbackInfo ci) {
         float shake = ClientDreadState.shakeIntensity;
         float tilt  = ClientDreadState.tiltAngle;
+        float jolt  = ClientDreadState.collapseJolt;
+
+        // Impact jolt: single hard camera hit when player collapses face-first
+        if (jolt > 0.01f) {
+            poseStack.translate(0f, jolt * 0.12f, 0f);   // lurch down
+            poseStack.translate((float)(Math.random() - 0.5) * jolt * 0.06f, 0f, 0f);
+        }
 
         // Micro-shake: two overlapping sine waves for organic tremor
         if (shake > 0.01f) {
