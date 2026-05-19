@@ -26,7 +26,13 @@ jobs:
       - name: Get jar path
         id: jar
         run: |
-          JAR=$(ls build/libs/*-remapped.jar 2>/dev/null || ls build/libs/*.jar | grep -v sources | head -1)
+          echo "=== build/libs contents ==="
+          ls -la build/libs/
+          JAR=$(ls build/libs/dusk-*-remapped.jar 2>/dev/null | head -1)
+          if [ -z "$JAR" ]; then
+            JAR=$(ls build/libs/dusk-*.jar | grep -v sources | grep -v remapped | head -1)
+          fi
+          echo "Selected: $JAR"
           echo "path=$JAR" >> $GITHUB_OUTPUT
           echo "name=$(basename $JAR)" >> $GITHUB_OUTPUT
 
@@ -123,9 +129,16 @@ jobs:
           }))
           ")
 
-          curl -sf -X POST \
+          echo "=== Uploading: $JAR_PATH ==="
+          RESP=$(curl -s -w "\n%{http_code}" -X POST \
             -H "Authorization: $MODRINTH_TOKEN" \
             -F "data=$META" \
             -F "jar=@$JAR_PATH;filename=$JAR_NAME" \
-            "https://api.modrinth.com/v2/version"
+            "https://api.modrinth.com/v2/version")
+          HTTP=$(echo "$RESP" | tail -1)
+          BODY=$(echo "$RESP" | head -n -1)
+          echo "HTTP $HTTP: $BODY"
+          if [ "$HTTP" -lt 200 ] || [ "$HTTP" -ge 300 ]; then
+            exit 1
+          fi
           echo "Version published."
