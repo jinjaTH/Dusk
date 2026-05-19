@@ -118,7 +118,7 @@ jobs:
             'version_number': f'{mod}+{mc}',
             'changelog': f'Release {ref}',
             'dependencies': [
-              {'version_type': 'required', 'project_id': 'P7dR8mSH'}
+              {'dependency_type': 'required', 'project_id': 'P7dR8mSH'}
             ],
             'game_versions': [mc],
             'version_type': 'release',
