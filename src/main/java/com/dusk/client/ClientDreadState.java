@@ -53,7 +53,20 @@ public class ClientDreadState {
     // Phantom figure (in-world particles) cooldown
     public static int   phantomFigureCooldown = 0;
 
+    // Delayed hard reset — counts down each tick, resets all state when reaches 0
+    public static int   pendingHardReset = 0;
+
     public static void tick() {
+        if (pendingHardReset > 0) {
+            if (--pendingHardReset == 0) {
+                reset();
+                net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+                if (mc != null) mc.getSoundManager().play(
+                    net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(
+                        net.minecraft.sounds.SoundEvents.PLAYER_BREATH, 0.55f, 0.85f));
+            }
+            return;
+        }
         float diff = targetScore - score;
         // Lerp rates: slow build-up (0.030), normal decay (0.055),
         // fast "snap back to sanity" when light recovers (target == 0, ~1s to clear).
@@ -113,6 +126,7 @@ public class ClientDreadState {
         tiltAngle      = 0f;
         collapseJolt   = 0f;
         phantomFigureCooldown = 0;
+        pendingHardReset = 0;
     }
 
     public static float smooth(float edge0, float edge1, float x) {
