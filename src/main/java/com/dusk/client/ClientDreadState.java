@@ -6,66 +6,117 @@ import net.fabricmc.api.Environment;
 @Environment(EnvType.CLIENT)
 public class ClientDreadState {
 
-    public static int nyctophobiaStage   = 0;
-    public static int acrophobiaStage    = 0;
-    public static int thalassophobiaStage = 0;
+    public static final float SILENCE_START  = 0.08f;
+    public static final float SILENCE_FULL   = 0.30f;
+    public static final float VIGNETTE_START = 0.18f;
+    public static final float VIGNETTE_FULL  = 0.55f;
+    public static final float PHANTOM_START  = 0.35f;
+    public static final float FLICKER_START  = 0.48f;
+    public static final float SHADOW_START   = 0.58f;
+    public static final float FOV_START      = 0.55f;
+    public static final float FOV_FULL       = 0.80f;
+    public static final float SHAKE_START    = 0.70f;
+    public static final float FADE_START     = 0.90f;
 
-    // Visual
-    public static float fovOffset       = 0f;
-    public static float vignetteAlpha   = 0f;
-    public static float shakeIntensity  = 0f;
-    public static float fadeAlpha       = 0f;  // 0 = transparent, 1 = full black
-    public static float fogMultiplier   = 1f;
+    public static float targetScore = 0f;
+    public static float score       = 0f;
 
-    // Movement
-    public static float driftAngle      = 0f;
-    public static float speedMultiplier = 1f;
-    public static boolean frozen        = false;
-    public static int    freezeTicks    = 0;
+    // Derived effect values
+    public static float vignetteAlpha  = 0f;
+    public static float ambientMult    = 1f;
+    public static float fovOffset      = 0f;
+    public static float shakeIntensity = 0f;
+    public static float fadeAlpha      = 0f;
 
-    // Sound
-    public static boolean silenceAmbient = false;
+    // Heartbeat pulse — spikes on each beat, drives vignette throb
+    public static float vignettePulse  = 0f;
 
-    public static void updateFromPacket(int phobiaId, int stage) {
-        switch (phobiaId) {
-            case 0 -> applyNycto(stage);
-            case 1 -> applyAcro(stage);
-            case 2 -> applyThala(stage);
+    // Peripheral flicker
+    public static float flickerAlpha   = 0f;
+    public static int   flickerX       = 0;
+    public static int   flickerY       = 0;
+    public static int   flickerCooldown = 0;
+
+    // Phantom shadow — brief dark humanoid silhouette
+    public static float shadowAlpha    = 0f;
+    public static int   shadowX        = 0;
+    public static int   shadowY        = 0;
+    public static int   shadowW        = 0;
+    public static int   shadowH        = 0;
+    public static int   shadowCooldown = 0;
+
+    // Collapse camera tilt (Z rotation in degrees) — builds at FADE_START
+    public static float tiltAngle      = 0f;
+    // One-shot impact jolt when player collapses — decays quickly
+    public static float collapseJolt   = 0f;
+
+    // Phantom figure (in-world particles) cooldown
+    public static int   phantomFigureCooldown = 0;
+
+    public static void tick() {
+        float diff = targetScore - score;
+        // Lerp rates: slow build-up (0.030), normal decay (0.055),
+        // fast "snap back to sanity" when light recovers (target == 0, ~1s to clear).
+        float rate;
+        if (diff > 0)             rate = 0.030f;
+        else if (targetScore == 0f) rate = 0.03f;
+        else                       rate = 0.055f;
+        score += diff * rate;
+        if (Math.abs(diff) < 0.0005f) score = targetScore;
+        score = Math.max(0f, Math.min(1f, score));
+
+        vignetteAlpha  = smooth(VIGNETTE_START, VIGNETTE_FULL, score) * 0.92f;
+        ambientMult    = 1f - smooth(SILENCE_START, SILENCE_FULL, score);
+        fovOffset      = -smooth(FOV_START, FOV_FULL, score) * 14f;
+        shakeIntensity = smooth(SHAKE_START, 0.96f, score);
+
+        if (score >= FADE_START) {
+            // Jolt accelerates the fade — "losing consciousness after impact"
+            float fadeRate = collapseJolt > 0.3f ? 0.08f : 0.012f;
+            fadeAlpha = Math.min(1f, fadeAlpha + fadeRate);
+        } else {
+            fadeAlpha = Math.max(0f, fadeAlpha - 0.04f);
         }
+
+        // Pulse decay each tick
+        if (vignettePulse > 0f) vignettePulse = Math.max(0f, vignettePulse - 0.06f);
+
+        // Collapse camera tilt — up to 25° when fully faded
+        float targetTilt = smooth(FADE_START, 1.0f, score) * 25f;
+        tiltAngle += (targetTilt - tiltAngle) * 0.04f;
+
+        // Jolt decays quickly — only used for the impact frame
+        if (collapseJolt > 0f) collapseJolt = Math.max(0f, collapseJolt - 0.15f);
+
+        // Cooldowns
+        if (flickerAlpha   > 0f) flickerAlpha   = Math.max(0f, flickerAlpha   - 0.25f);
+        if (flickerCooldown > 0) flickerCooldown--;
+        if (shadowAlpha    > 0f) shadowAlpha    = Math.max(0f, shadowAlpha    - 0.018f);
+        if (shadowCooldown  > 0) shadowCooldown--;
+        if (phantomFigureCooldown > 0) phantomFigureCooldown--;
     }
 
-    private static void applyNycto(int stage) {
-        nyctophobiaStage = stage;
-        silenceAmbient   = stage >= 1;
-        vignetteAlpha    = stage >= 3 ? 0.35f : 0f;
-        fovOffset        = stage >= 3 ? -5f   : 0f;
-        driftAngle       = stage >= 4 ? 8f    : 0f;
-        shakeIntensity   = 0f;
-        fogMultiplier    = 1f;
-
-        if (stage == 6) fadeAlpha = 1f;
-        if (stage == 0) { fadeAlpha = 0f; speedMultiplier = 1f; frozen = false; driftAngle = 0f; }
+    // Called when score=0 arrives — immediate clear, no lerp
+    public static void reset() {
+        targetScore    = 0f;
+        score          = 0f;
+        vignetteAlpha  = 0f;
+        ambientMult    = 1f;
+        fovOffset      = 0f;
+        shakeIntensity = 0f;
+        fadeAlpha      = 0f;
+        vignettePulse  = 0f;
+        flickerAlpha   = 0f;
+        flickerCooldown = 0;
+        shadowAlpha    = 0f;
+        shadowCooldown = 0;
+        tiltAngle      = 0f;
+        collapseJolt   = 0f;
+        phantomFigureCooldown = 0;
     }
 
-    private static void applyAcro(int stage) {
-        acrophobiaStage  = stage;
-        vignetteAlpha    = Math.max(vignetteAlpha, stage >= 1 ? 0.25f : 0f);
-        fovOffset        = Math.min(fovOffset, stage >= 2 ? -8f : 0f);
-        shakeIntensity   = stage >= 3 ? 0.6f : 0f;
-        speedMultiplier  = stage >= 4 ? 0.55f : 1f;
-        frozen           = stage == 5;
-        freezeTicks      = frozen ? 40 : 0; // 2s
-
-        if (stage == 0) { shakeIntensity = 0f; speedMultiplier = 1f; frozen = false; }
-    }
-
-    private static void applyThala(int stage) {
-        thalassophobiaStage = stage;
-        fogMultiplier    = stage >= 2 ? 0.35f : 1f;
-        shakeIntensity   = Math.max(shakeIntensity, stage >= 5 ? 0.4f : 0f);
-        speedMultiplier  = Math.min(speedMultiplier, stage >= 5 ? 0.65f : 1f);
-
-        if (stage == 6) fadeAlpha = 1f;
-        if (stage == 0) { fogMultiplier = 1f; }
+    public static float smooth(float edge0, float edge1, float x) {
+        float t = Math.max(0f, Math.min(1f, (x - edge0) / (edge1 - edge0)));
+        return t * t * (3f - 2f * t);
     }
 }
