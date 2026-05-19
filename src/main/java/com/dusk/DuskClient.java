@@ -20,11 +20,9 @@ public class DuskClient implements ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(DreadStagePayload.TYPE, (payload, context) -> {
             context.client().execute(() -> {
                 if (payload.hardReset()) {
-                    ClientDreadState.reset();
+                    // Delay 2 ticks — lets DARKNESS potion removal reach client before we clear fade
+                    ClientDreadState.pendingHardReset = 2;
                     SoundEffects.stopAllDuskSounds();
-                    context.client().getSoundManager().play(
-                        net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(
-                            net.minecraft.sounds.SoundEvents.PLAYER_BREATH, 0.55f, 0.85f));
                 } else {
                     // Normal update — let lerp handle the transition.
                     // For light recovery (target=0), the lerp feels like consciousness returning.
