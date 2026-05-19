@@ -50,8 +50,9 @@ jobs:
           # Upload icon
           curl -s -X PATCH \
             -H "Authorization: $MODRINTH_TOKEN" \
-            -F "icon=@icon.png;type=image/png" \
-            "https://api.modrinth.com/v2/project/dusk-nyctophobia/icon" || true
+            -H "Content-Type: image/png" \
+            --data-binary @icon.png \
+            "https://api.modrinth.com/v2/project/dusk-nyctophobia/icon?ext=png" || true
 
           # Update description, body, license
           BODY=$(python3 -c "
